@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <script>
+    // 1) Si el navegador bloquea el almacenamiento (pasa dentro de Apps Script con algunas configuraciones), se usa memoria y la app sigue andando.
+    (function () {
+      try { window.localStorage.getItem('5d_test'); }
+      catch (e) {
+        var m = {}, falso = { getItem: function (k) { return k in m ? m[k] : null; }, setItem: function (k, v) { m[k] = String(v); }, removeItem: function (k) { delete m[k]; } };
+        try { Object.defineProperty(window, 'localStorage', { value: falso, configurable: true }); } catch (e2) {}
+      }
+    })();
+    // 2) Cualquier error de la app aparece en una barra roja abajo, para poder verlo y avisar.
+    (function () {
+      function mostrar(txt) {
+        var d = document.getElementById('err-global');
+        if (!d) { d = document.createElement('div'); d.id = 'err-global'; d.onclick = function () { d.remove(); };
+          d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#be123c;color:#fff;font:600 12px/1.35 system-ui,sans-serif;padding:8px 12px;white-space:pre-wrap;max-height:40vh;overflow:auto';
+          (document.body || document.documentElement).appendChild(d); }
+        d.textContent += '⚠️ ' + txt + '\n(tocá para cerrar)\n';
+      }
+      function fuente(e) {   // si es un error de sintaxis, muestra el pedazo de código tal como llegó al navegador
+        try {
+          if (!e || !e.lineno || !/SyntaxError/.test(e.message || '')) return '';
+          var out = '';
+          [].slice.call(document.scripts).forEach(function (sc) {
+            if (sc.src) return; var L = sc.textContent.split('\n');
+            if (L.length >= e.lineno && L.length > 50) { var c = e.colno || 0; out += '\n→ ' + (L[e.lineno - 1] || '').slice(Math.max(0, c - 80), c + 60).replace(/\s+/g, ' ') + '\n  (columna ' + c + ', script de ' + L.length + ' líneas)'; }
+          });
+          return out;
+        } catch (x) { return ''; }
+      }
+      window.addEventListener('error', function (e) { if (e && e.message && e.message.indexOf('ResizeObserver') === -1) mostrar(e.message + (e.lineno ? ' [línea ' + e.lineno + ']' : '') + fuente(e)); });
+      window.addEventListener('unhandledrejection', function (e) { mostrar('Promesa rechazada: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)); });
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1e2d66">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="5DIGOS">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>5DIGOS F.C. - Sistema de Gestión & Torneo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    @media print {
+      body { background: white !important; color: black !important; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      .card-box { box-shadow: none !important; border: 1px solid #ddd !important; }
+    }
+    .print-only { display: none; }
+  </style>
+<style>
+  :root{--navy:#1e2d66;--navy2:#16214d;--cream:#f4efe0}
+  .bg-slate-900{background-color:var(--navy)!important}.bg-slate-950{background-color:var(--navy2)!important}
+  .bg-amber-500{background-color:var(--cream)!important;color:var(--navy2)!important}.border-amber-500{border-color:var(--cream)!important}
+  .text-amber-400{color:#e9dfb8!important}
+  body{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom))!important;-webkit-tap-highlight-color:transparent}
+  header{padding-top:env(safe-area-inset-top)}
+  #bnav{position:fixed;bottom:0;left:0;right:0;z-index:45;background:var(--navy);padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 12px rgba(0,0,0,.25)}
+  #bnav button{flex:1;padding:.55rem 0 .45rem;color:#aab3d6;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:56px}
+  #bnav button span{font-size:19px;line-height:1.1}#bnav button.on{color:#fff;background:rgba(255,255,255,.12);box-shadow:inset 0 3px 0 var(--cream)}
+  .pcard{background:#fff;border:1px solid #e2e8f0;border-radius:1rem;padding:.85rem;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .chip{min-height:44px;border-radius:.75rem;font-size:12px;font-weight:800;border:2px solid #cbd5e1;color:#64748b;background:#f8fafc}
+  .chip.on{background:#059669;border-color:#059669;color:#fff}
+  .pcard input[type=number],.pcard input[type=text]{width:100%;min-height:44px;border:1px solid #cbd5e1;border-radius:.75rem;padding:0 .75rem;font-size:16px}
+  .pbtn{min-height:44px;border-radius:.75rem;font-size:13px;font-weight:700;padding:0 .9rem;display:inline-flex;align-items:center;justify-content:center;gap:.3rem}
+    #bnav,#cards-jug{display:none}
+  @media (max-width:767px),(pointer:coarse) and (max-width:1100px){
+    #bnav{display:flex}#cards-jug{display:block}#bnav-hide-top{display:none!important}
+    #wrap-jug:not(.vt){display:none!important}input,select{font-size:16px}
+  }
+</style>
+<style>
+  .overflow-x-auto{max-height:calc(100vh - 13rem);overflow:auto;-webkit-overflow-scrolling:touch}
+  .overflow-x-auto thead th{position:sticky;top:0;z-index:20;background:#e8ecf7!important;box-shadow:0 1px 0 #cbd5e1}
+  .overflow-x-auto thead th:first-child{left:0;z-index:30}
+  @media print{.overflow-x-auto{max-height:none!important;overflow:visible!important}}
+</style>
+<style>
+  .overflow-x-auto thead th.mes-sel{background:#c7d2fe!important;color:#1e1b4b}
+  td.mes-sel{background:#eef2ff!important;box-shadow:inset 2px 0 0 #6366f1,inset -2px 0 0 #6366f1}
+  .chip.sel{outline:3px solid #6366f1;outline-offset:2px}
+</style>
+<style>
+  .solo-lectura #kpis,.solo-lectura #tbtn-remanente,.solo-lectura #tbtn-liga,.solo-lectura .solo-admin,.solo-lectura form,
+  .solo-lectura #tab-reporte>:not(#rep-mensual),.solo-lectura #bnav button[data-t="remanente"],.solo-lectura #bnav button[data-t="liga"],
+  .solo-lectura [onclick*="abrirModalPrecios"],.solo-lectura [onclick*="eliminar"],.solo-lectura [onclick*="limpiar"],.solo-lectura [onclick*="marcarDevolucion"],
+  .solo-lectura [onclick*="ReporteDeudas"],.solo-lectura [onclick*="cargarPrecios"]{display:none!important}
+  .solo-lectura [onclick*="togglePagoJugador"],.solo-lectura #tab-jugadores input,.solo-lectura #cards-jug input,.solo-lectura #rm-body input,.solo-lectura #cards-jug label{pointer-events:none}
+</style>
+<style id="skin">
+@media screen {
+  /* Identidad: azul camiseta + hueso del escudo. Tipografía: Barlow (texto) y Barlow Condensed (títulos y números, estilo marcador). */
+  :root{--navy:#1e2d66;--noche:#121a3d;--hueso:#f4efe0;--fondo:#eef1f7;--linea:#dfe4f0;--tinta:#0f172a;--f-cond:"Barlow Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif}
+  body{background:var(--fondo)!important;color:var(--tinta);font-family:Barlow,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45}
+  main{padding-top:1.25rem!important}
+  @media(min-width:1024px){main{padding-top:1.75rem!important;padding-bottom:3rem!important}}
+
+  /* Encabezado: camiseta de rayas finas */
+  header.sticky{background:repeating-linear-gradient(90deg,rgba(244,239,224,.06) 0 2px,transparent 2px 16px),linear-gradient(180deg,#24367f,#16215a)!important;border-bottom:3px solid var(--hueso)!important;box-shadow:0 4px 18px rgba(18,26,61,.25)!important}
+  header h1{font-family:var(--f-cond);font-weight:800;font-size:clamp(1.1rem,4.8vw,1.35rem);letter-spacing:.03em;color:var(--hueso);white-space:nowrap}
+  @media(max-width:479px){header .bg-amber-500{display:none!important}header span.text-slate-400{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100vw - 200px)}}
+  header img{border:2px solid var(--hueso)!important;box-shadow:0 0 0 3px rgba(244,239,224,.18)}
+  header .bg-amber-500{background:var(--hueso)!important;color:var(--navy)!important;font-family:var(--f-cond);font-size:12px!important;letter-spacing:.04em}
+  header .text-slate-400{color:#b9c3e6!important}
+  header button{background:rgba(244,239,224,.1)!important;border:1px solid rgba(244,239,224,.22)!important;color:var(--hueso)!important;border-radius:11px!important;min-height:40px}
+
+  /* Marcador de caja: una sola pieza, el saldo es la cifra principal */
+  #kpis{gap:0!important;background:var(--noche);border-radius:18px;overflow:hidden;border:1px solid #2b3a80;box-shadow:0 6px 20px rgba(18,26,61,.18)}
+  #kpis>div{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:0 0 0 .5px rgba(244,239,224,.16)!important;padding:.9rem 1rem!important}
+  #kpis>div>span:first-child{text-transform:none!important;letter-spacing:0!important;font-size:13px!important;font-weight:600!important;color:#b9c3e6!important}
+  #kpis>div>span:last-child{color:#8f9bc9!important}
+  #kpis [id^=kpi-]{font-family:var(--f-cond);font-weight:800!important;font-size:clamp(1.7rem,6vw,2.5rem)!important;line-height:1.05;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+  #kpi-ingresos{color:#7ee0b4!important}#kpi-remanente{color:#b6c2ff!important}#kpi-egresos{color:#ff9fae!important}#kpi-saldo{color:var(--hueso)!important}
+  #kpis>div:last-child{background:rgba(244,239,224,.09)!important}
+  @media(max-width:1023px){
+    #kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+    #kpis>div:last-child{grid-column:1/-1;order:-1;padding:1.1rem 1.1rem 1rem!important}
+    #kpis>div:last-child [id^=kpi-]{font-size:clamp(2.4rem,11vw,3.2rem)!important}
+    #kpis>div:not(:last-child){padding:.75rem .8rem!important}
+    #kpis>div:not(:last-child) [id^=kpi-]{font-size:clamp(1rem,4.1vw,1.6rem)!important;letter-spacing:-.01em}
+    #kpis>div:not(:last-child)>span:first-child{font-size:12px!important}
+    #kpis>div:not(:last-child)>span:last-child{display:none}
+  }
+
+  /* Superficies tranquilas: borde fino, sin sombras pesadas, un solo radio */
+  main .rounded-2xl{border-radius:16px!important}
+  main .shadow-sm{box-shadow:none!important}
+  main .border-slate-200{border-color:var(--linea)!important}
+  .text-slate-500{color:#5b6788!important}.text-slate-400{color:#7d88a8!important}
+  .bg-indigo-600{background:var(--navy)!important}.bg-indigo-600:hover,.hover\:bg-indigo-700:hover{background:var(--noche)!important}
+  .text-indigo-600{color:#2b3f94!important}
+  main h3,main h4{font-family:var(--f-cond);font-weight:700;font-size:1.15rem!important;letter-spacing:.01em;color:var(--tinta)}
+  .font-black,td,th{font-variant-numeric:tabular-nums}
+
+  /* Pestañas (escritorio) */
+  #bnav-hide-top{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:5px;gap:4px}
+  .tab-btn{border-radius:12px!important;font-family:var(--f-cond);font-size:15px!important;letter-spacing:.01em}
+  .tab-btn.bg-slate-900{background:var(--navy)!important;color:var(--hueso)!important;box-shadow:none!important}
+
+  /* Tablas */
+  thead th{font-family:var(--f-cond);font-size:14px!important;font-weight:700!important;letter-spacing:.02em;color:#3b4a7a!important}
+  tbody tr:hover{background:#f5f7fc}
+
+  /* Controles */
+  button{transition:transform .12s ease,background-color .15s ease}button:active{transform:scale(.97)}
+  :focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+  header :focus-visible,#bnav :focus-visible{outline-color:var(--hueso)}
+  input[type=text],input[type=number],input[type=date],select,textarea{border-radius:10px!important;border-color:#cdd5e8!important}
+  input[type=text]:focus,input[type=number]:focus,input[type=date]:focus,select:focus,textarea:focus{outline:none!important;border-color:var(--navy)!important;box-shadow:0 0 0 3px rgba(30,45,102,.18)!important}
+  .pcard{border-radius:16px!important;border:1px solid var(--linea)!important;box-shadow:none!important;padding:1rem!important}
+  .chip{font-family:var(--f-cond);font-size:15px!important;font-weight:800;letter-spacing:.02em;border-radius:12px!important}
+  .chip.sel{outline-color:var(--navy)!important}
+  #cumple-banner:not(.hidden){border-radius:16px}
+
+  /* Ventanas: se abren con un deslizamiento corto (responde a tu toque) */
+  .fixed.inset-0:not(.hidden)>div{animation:sheet .22s cubic-bezier(.2,.8,.2,1)}
+  @keyframes sheet{from{opacity:0;transform:translateY(18px)}}
+  @media(max-width:640px){
+    #modal-precios,#modal-ficha{align-items:flex-end!important;padding:0!important}
+    #modal-precios>div,#modal-ficha>div{border-radius:22px 22px 0 0!important;max-width:none!important;width:100%}
+  }
+
+  /* Barra inferior del celular: flotante, con el mes activo en hueso */
+  @media(max-width:767px),(pointer:coarse) and (max-width:1100px){
+    #bnav{left:10px!important;right:10px!important;bottom:calc(10px + env(safe-area-inset-bottom))!important;border-radius:22px;background:var(--noche)!important;padding:5px!important;gap:2px;border:1px solid rgba(244,239,224,.12);box-shadow:0 10px 28px rgba(18,26,61,.4)!important}
+    #bnav button{border-radius:17px;min-height:54px;font-family:var(--f-cond);font-size:12.5px;font-weight:700;letter-spacing:.01em;color:#9fabd6}
+    #bnav button.on{background:var(--hueso)!important;color:var(--navy)!important;box-shadow:none!important}
+    body{padding-bottom:calc(6.75rem + env(safe-area-inset-bottom))!important}
+    form input,form select,#cards-jug input{min-height:46px}
+  }
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-20">
+
+  <!-- TOPBAR -->
+  <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b-2 border-amber-500 no-print">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <!-- Logo (simplificado por espacio, mantené el original si lo preferís) -->
+        <img src="data:image/jpeg;base64,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" alt="5DIGOS" class="w-11 h-11 rounded-full border-2 border-amber-400 object-cover bg-white">
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-extrabold tracking-wider uppercase leading-none">5DIGOS FÚTBOL CLUB</h1>
+            <span class="text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-black tracking-wide">+30 ZONA B</span>
+          </div>
+          <span class="text-xs text-slate-400 font-medium">Torneo Fútbol 7 • Complejo Club 12 · v16</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="abrirModalPrecios()" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700" title="Configurar tarifas de cuotas">
+          ⚙️ <span class="hidden sm:inline">Tarifas</span>
+        </button>
+        <button id="btn-instalar" onclick="instalarApp()" class="hidden p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs font-semibold border border-slate-700">📲 Instalar</button>
+        <button onclick="cargarDatos()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700" title="Sincronizar con Google Sheets">
+          🔄 <span class="hidden sm:inline">Sincronizar</span>
+        </button>
+        
+      </div>
+    </div>
+  </header>
+
+  <!-- ENCABEZADO DE IMPRESIÓN -->
+  <div class="print-only p-6 border-b-2 border-slate-800 mb-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div>
+          <h1 class="text-2xl font-black uppercase tracking-wide text-slate-900">5DIGOS FÚTBOL CLUB (+30 B)</h1>
+          <p class="text-sm font-semibold text-slate-600">Reporte de Cobranzas, Torneo, Camisetas y Balance de Caja</p>
+        </div>
+      </div>
+      <div class="text-right text-xs text-slate-500" id="print-fecha-hora"></div>
+    </div>
+  </div>
+
+  <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- RESUMEN DE CAJA -->
+    <div id="cumple-banner" class="hidden"></div>
+    <section id="kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cuotas Cobradas</span>
+        <span id="kpi-ingresos" class="text-xl sm:text-2xl font-black text-emerald-600 mt-1">$0</span>
+        <span class="text-[11px] text-slate-400">Aportes del plantel</span>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Remanentes / Extras</span>
+        <span id="kpi-remanente" class="text-xl sm:text-2xl font-black text-indigo-600 mt-1">$0</span>
+        <span class="text-[11px] text-slate-400">Sobrantes y aportes</span>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pagado a la Liga</span>
+        <span id="kpi-egresos" class="text-xl sm:text-2xl font-black text-rose-600 mt-1">$0</span>
+        <span class="text-[11px] text-slate-400">Canchas y planillas</span>
+      </div>
+      <div class="bg-slate-900 text-white p-4 rounded-2xl shadow-sm border border-slate-800 flex flex-col justify-between">
+        <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Saldo Real en Mano</span>
+        <span id="kpi-saldo" class="text-xl sm:text-2xl font-black text-amber-400 mt-1">$0</span>
+        <span class="text-[11px] text-slate-300">Caja total disponible</span>
+      </div>
+    </section>
+
+    <!-- BARRA DE NAVEGACIÓN -->
+    <nav class="flex overflow-x-auto space-x-2 border-b border-slate-200 pb-1 no-print">
+      <button onclick="setTab('jugadores')" id="tbtn-jugadores" class="tab-btn px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap bg-slate-900 text-white transition shadow-sm">
+        👥 Plantel & Cobros
+      </button>
+      <button onclick="setTab('camisetas')" id="tbtn-camisetas" class="tab-btn px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap text-slate-600 hover:bg-slate-200/70 transition">
+        👕 Lavado de Camisetas
+      </button>
+      <button onclick="setTab('remanente')" id="tbtn-remanente" class="tab-btn px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap text-slate-600 hover:bg-slate-200/70 transition">
+        💵 Remanentes & Extras
+      </button>
+      <button onclick="setTab('liga')" id="tbtn-liga" class="tab-btn px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap text-slate-600 hover:bg-slate-200/70 transition">
+        ⚽ Pagos de Liga
+      </button>
+      <button onclick="setTab('reporte')" id="tbtn-reporte" class="tab-btn px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap text-slate-600 hover:bg-slate-200/70 transition">
+        📋 Reporte Completo
+      </button>
+      <button onclick="setTab('torneo')" id="tbtn-torneo" class="tab-btn px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap text-slate-600 hover:bg-slate-200/70 transition">
+        🏆 Torneo Oficial (+30 B)
+      </button>
+    </nav>
+
+    <!-- ==================== PESTAÑA 1: PLANTEL Y CUOTAS ==================== -->
+    <section id="tab-jugadores" class="space-y-4">
+      <div class="bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center gap-2 no-print">
+        <span class="text-xs font-bold text-slate-600">📆 Mes en pantalla:</span><div id="mes-chips" class="flex flex-wrap gap-1.5"></div>
+        <button onclick="abrirCumples()" class="ml-auto px-3 py-2 rounded-xl text-xs font-bold border border-amber-300 bg-amber-50 text-amber-800">🎂 Cumpleaños</button>
+        <span class="text-[11px] text-slate-500 w-full">El pago parcial y el motivo / aclaración que ves y cargás corresponden a este mes (• = mes en curso).</span>
+      </div>
+      
+      <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-950 no-print">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span class="font-bold flex items-center gap-1">📌 Valores vigentes:</span>
+          <span>Inscripción: <b id="tag-precio-insc">$12.000</b></span>
+          <span>Septiembre: <b id="tag-precio-m1">$30.000</b></span>
+          <span>Octubre: <b id="tag-precio-m2">$30.000</b></span>
+          <span>Noviembre: <b id="tag-precio-m3">$30.000</b></span>
+          <span>Diciembre: <b id="tag-precio-m4">$30.000</b></span>
+        </div>
+        <button onclick="abrirModalPrecios()" class="font-bold text-amber-800 underline hover:text-amber-950">
+          Modificar tarifas ➔
+        </button>
+      </div>
+
+      <!-- Formulario Agregar Jugador -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden no-print">
+        <div class="p-4 sm:px-6 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between cursor-pointer" onclick="toggleFormJugador()">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">+</span>
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm">Dar de alta a un nuevo jugador</h3>
+              <p class="text-xs text-slate-500">Cargar datos personales, contacto y cobertura médica</p>
+            </div>
+          </div>
+          <button type="button" id="btn-toggle-form" class="text-xs text-slate-600 font-semibold hover:underline">
+            Desplegar formulario
+          </button>
+        </div>
+
+        <form id="form-nuevo-jugador" onsubmit="agregarJugadorCompleto(event)" class="hidden p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 bg-white">
+          <div class="lg:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Apellido y Nombre *</label>
+            <input id="j-nombre" type="text" placeholder="Ej: PEREZ, Juan Ignacio" required 
+                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">DNI</label>
+            <input id="j-dni" type="number" placeholder="Ej: 38450123" 
+                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha Nacimiento</label>
+            <input id="j-nacimiento" type="text" placeholder="DD/MM/AAAA" 
+                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Obra Social / Prepaga</label>
+            <input id="j-obrasocial" type="text" placeholder="Ej: IOSPER, OSDE" 
+                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div class="lg:col-span-3">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Celular de Contacto</label>
+            <input id="j-celular" type="tel" placeholder="Ej: 3434123456" 
+                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div class="lg:col-span-2 flex items-end">
+            <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition shadow-sm">
+              💾 Guardar en el Plantel
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tabla Principal de Cobranzas -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <h2 class="font-bold text-slate-800 text-sm sm:text-base">Control de Pagos del Plantel</h2>
+            <span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold" id="total-jugadores-count">…</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 no-print">
+            <button onclick="toggleOrdenJugadores()" id="btn-orden-az" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-1.5 transition" title="Cambiar orden de la tabla">
+              <span id="btn-orden-icon">📋</span> <span id="btn-orden-txt">Orden: Alfabético (A-Z)</span>
+            </button>
+            <button onclick="abrirModalReporteDeudas()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm" title="Generar imagen o PDF del estado de deudas">
+              📸 <span>Generar Imagen / PDF</span>
+            </button>
+            <button onclick="copiarReporteDeudas()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm" title="Copiar texto para WhatsApp">
+              📲 <span>Copiar Texto</span>
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4 sticky left-0 bg-slate-100 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">Jugador / Contacto</th>
+                <th class="py-3 px-2 text-center">Inscripción<br><span class="text-[11px] font-normal text-slate-400" id="th-precio-insc">$12.000</span></th>
+                <th class="py-3 px-2 text-center">Septiembre<br><span class="text-[11px] font-normal text-slate-400" id="th-precio-m1">$30.000</span></th>
+                <th class="py-3 px-2 text-center">Octubre<br><span class="text-[11px] font-normal text-slate-400" id="th-precio-m2">$30.000</span></th>
+                <th class="py-3 px-2 text-center">Noviembre<br><span class="text-[11px] font-normal text-slate-400" id="th-precio-m3">$30.000</span></th>
+                <th class="py-3 px-2 text-center">Diciembre<br><span class="text-[11px] font-normal text-slate-400" id="th-precio-m4">$30.000</span></th>
+                <th class="py-3 px-2 text-center bg-indigo-50/70 text-indigo-950 font-bold">Pago Parcial<br><span class="text-[11px] font-normal text-indigo-600">Entrega ($)</span></th>
+                <th class="py-3 px-3 text-right font-bold">Total Pagado</th>
+                <th class="py-3 px-3">Motivo / Aclaración <span id="th-obs-mes" class="text-[10px] font-normal text-indigo-600"></span></th>
+                <th class="py-3 px-3 text-center no-print">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-jugadores-body" class="divide-y divide-slate-100">
+              <tr><td colspan="9" class="p-6 text-center text-slate-400">Cargando plantel...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAS DEMÁS PESTAÑAS Y MODALES VAN AQUÍ DEBAJO -->
+    <!-- ==================== PESTAÑA 2: LAVADO DE CAMISETAS ==================== -->
+    <section id="tab-camisetas" class="hidden space-y-4">
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm no-print">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-slate-800 text-sm">Asignar quién se lleva las camisetas</h3>
+          <button onclick="limpiarHistorialCamisetas()" class="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 transition">
+            🗑️ Vaciar Historial de Temporada
+          </button>
+        </div>
+        <form onsubmit="guardarLavadoCamiseta(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Fecha de Entrega</label>
+            <input id="cam-fecha" type="date" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Jugador Responsable</label>
+            <select id="cam-jugador" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+              <option value="">Elegir jugador...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Juego de Indumentaria</label>
+            <input id="cam-juego" type="text" value="Camisetas Titulares" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div class="flex items-end">
+            <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-sm transition">
+              👕 Asignar Responsable
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <h4 class="font-bold text-slate-800 text-sm mb-3 flex items-center justify-between">
+            <span>🧺 Conteo de Lavados</span>
+            <span class="text-xs text-slate-400 font-normal">Equitativo</span>
+          </h4>
+          <div id="lista-conteo-lavados" class="space-y-2 max-h-80 overflow-y-auto text-xs pr-1"></div>
+          <div class="grid grid-cols-2 gap-2 mt-3 no-print">
+            <button onclick="generarImagenLavado()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 py-2.5 rounded-xl">🖼️ Imagen para el grupo</button>
+            <button onclick="copiarTextoLavado()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2.5 rounded-xl">📲 Texto</button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h4 class="font-bold text-slate-800 text-sm">Historial de Camisetas</h4>
+            <span class="text-xs text-slate-400">Control de devolución</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
+                <tr>
+                  <th class="py-3 px-3">Fecha</th>
+                  <th class="py-3 px-3">Jugador</th>
+                  <th class="py-3 px-3">Juego</th>
+                  <th class="py-3 px-2 text-center">Estado</th>
+                  <th class="py-3 px-3">Devolución</th>
+                  <th class="py-3 px-3 text-center no-print">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-camisetas-body" class="divide-y divide-slate-100 text-xs sm:text-sm"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PESTAÑA 3: REMANENTES Y CAJA EXTRA ==================== -->
+    <section id="tab-remanente" class="hidden space-y-4">
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm no-print">
+        <h3 class="font-bold text-slate-800 text-sm mb-1">Cargar Remanente o Ingreso Extra</h3>
+        <p class="text-xs text-slate-500 mb-4">Anotá plata sobrante de partidos, asados, rifas o remanente anterior en caja.</p>
+        <form onsubmit="agregarRemanente(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+            <input id="rem-fecha" type="date" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Detalle / Origen</label>
+            <input id="rem-detalle" type="text" placeholder="Ej: Remanente asado fecha 3, Sobrante de inscripción, Rifa" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Monto ($)</label>
+            <div class="flex gap-2">
+              <input id="rem-monto" type="text" inputmode="numeric" placeholder="15000" required min="1" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+              <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition">
+                + Guardar
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h4 class="font-bold text-slate-800 text-sm">Registro de Remanentes e Ingresos Extras</h4>
+          <span id="total-remanente-sum" class="font-bold text-indigo-600 text-sm">$0 acumulado</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Fecha</th>
+                <th class="py-3 px-4">Detalle / Origen</th>
+                <th class="py-3 px-4 text-right">Monto</th>
+                <th class="py-3 px-3 text-center no-print">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-remanente-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 mt-4" id="bloque-gastos">
+      <div><h3 class="font-bold text-slate-800 text-sm">🧾 Gastos Extras</h3>
+        <p class="text-xs text-slate-500">Compras o pagos que no son de la liga (camisetas, pelotas, etc.). Siempre se restan de la caja; si elegís "Ingresos extras", también se restan de ahí.</p></div>
+      <form onsubmit="agregarGasto(event)" class="grid grid-cols-1 sm:grid-cols-5 gap-3 no-print">
+        <input id="gx-fecha" type="date" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+        <input id="gx-detalle" type="text" placeholder="Ej: Confección de camisetas" required class="sm:col-span-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+        <input id="gx-monto" type="text" inputmode="numeric" placeholder="250.000" required class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+        <select id="gx-origen" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"><option value="fondo">🏦 Fondo general</option><option value="extras">💰 Ingresos extras</option></select>
+        <button type="submit" class="sm:col-span-5 bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm">+ Registrar gasto</button>
+      </form>
+      <p id="gx-resumen" class="text-xs text-slate-600 bg-slate-50 rounded-xl p-3"></p>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-slate-600 font-semibold text-xs"><tr>
+        <th class="py-3 px-4">Fecha</th><th class="py-3 px-4">Detalle</th><th class="py-3 px-4">Se descuenta de</th><th class="py-3 px-4 text-right">Monto</th><th class="py-3 px-3 no-print"></th></tr></thead>
+        <tbody id="tabla-gastos-body" class="divide-y divide-slate-100"></tbody></table></div>
+    </div>
+    </section>
+    <!-- ==================== PESTAÑA 4: PAGOS A LA LIGA ==================== -->
+    <section id="tab-liga" class="hidden space-y-4">
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm no-print">
+        <h3 class="font-bold text-slate-800 text-sm mb-3">Registrar Gasto o Pago a la Liga</h3>
+        <form onsubmit="agregarPagoLiga(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+            <input id="liga-fecha" type="date" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Concepto</label>
+            <input id="liga-concepto" type="text" placeholder="Ej: Cancha Fecha 1, Planilla" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Costo Estimado ($)</label>
+            <input id="liga-costo" type="text" inputmode="numeric" placeholder="80000" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Monto Pagado ($)</label>
+            <div class="flex gap-2">
+              <input id="liga-pagado" type="text" inputmode="numeric" placeholder="80000" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+              <button type="submit" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition">
+                + Guardar
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h4 class="font-bold text-slate-800 text-sm">Compromisos con la Liga</h4>
+          <span class="text-xs text-slate-400 font-medium">Control de egresos</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold text-xs border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Fecha</th>
+                <th class="py-3 px-4">Concepto</th>
+                <th class="py-3 px-4 text-right">Costo Torneo</th>
+                <th class="py-3 px-4 text-right">Monto Pagado</th>
+                <th class="py-3 px-4 text-right">Saldo Pendiente</th>
+                <th class="py-3 px-3 text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-liga-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PESTAÑA 5: REPORTE GENERAL ==================== -->
+    <section id="tab-reporte" class="hidden space-y-6">
+      <div class="flex justify-end no-print solo-admin"><button onclick="exportarExcel()" class="bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl border border-slate-300">💾 Exportar todo a Excel</button></div>
+      <div id="rep-mensual" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div><h4 class="font-bold text-slate-800 text-sm">📅 Reporte mensual de cuotas</h4><p id="rm-sub" class="text-xs text-slate-500 mt-0.5"></p></div>
+          <div class="flex gap-2 no-print"><select id="rm-mes" onchange="renderReporteMensual()" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"></select>
+            <button onclick="generarImagenReporte()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 py-2 rounded-xl">🖼️ Generar imagen</button><button onclick="copiarReporteMensual()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2 rounded-xl">📲 Texto</button></div>
+        </div>
+        <div id="rm-kpis" class="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3"></div>
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead id="rm-head" class="bg-slate-50 text-slate-600 font-semibold text-xs"></thead><tbody id="rm-body" class="divide-y divide-slate-100"></tbody></table></div>
+      </div>
+
+      <div class="flex items-center justify-between bg-amber-50 border border-amber-200 p-4 rounded-2xl no-print">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">📑</span>
+          <div>
+            <h4 class="font-bold text-amber-950 text-sm">Balance interno (incluye caja, no es para el grupo)</h4>
+            <p class="text-xs text-amber-800">Contiene el balance neto, aportes y registro de lavado de indumentaria.</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="copiarReporteDeudas()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm">
+            📲 Copiar Solo Deudas (Plantel)
+          </button>
+          <button onclick="copiarTextoReporte()" class="bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-semibold text-xs px-3 py-2 rounded-xl transition">
+            📲 Copiar Balance Completo
+          </button>
+          <button onclick="window.print()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition">
+            🖨️ Imprimir / Guardar PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+        <div>
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Resumen de Caja</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <span class="text-[11px] text-slate-500 block">Cuotas Jugadores:</span>
+              <span id="rep-ingresos" class="font-bold text-emerald-700 text-base">$0</span>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <span class="text-[11px] text-slate-500 block">Remanentes / Extras:</span>
+              <span id="rep-remanentes" class="font-bold text-indigo-700 text-base">$0</span>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <span class="text-[11px] text-slate-500 block">Gastos Liga:</span>
+              <span id="rep-egresos" class="font-bold text-rose-700 text-base">$0</span>
+            </div>
+            <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 text-white">
+              <span class="text-[11px] text-amber-400 block">Saldo en Mano:</span>
+              <span id="rep-saldo" class="font-bold text-amber-400 text-base">$0</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">2. Estado de Jugadores</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
+              <thead class="bg-slate-100 text-slate-700">
+                <tr>
+                  <th class="p-2.5">Jugador</th>
+                  <th class="p-2.5 text-center">Inscripción</th>
+                  <th class="p-2.5 text-center">Septiembre</th>
+                  <th class="p-2.5 text-center">Octubre</th>
+                  <th class="p-2.5 text-center">Noviembre</th>
+                  <th class="p-2.5 text-center">Diciembre</th>
+                  <th class="p-2.5 text-right">Total Abonado</th>
+                  <th class="p-2.5">Observaciones</th>
+                </tr>
+              </thead>
+              <tbody id="rep-jugadores-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">3. Registro de Lavado de Indumentaria</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left border border-slate-200 rounded-lg overflow-hidden">
+              <thead class="bg-slate-100 text-slate-700">
+                <tr>
+                  <th class="p-2.5">Fecha</th>
+                  <th class="p-2.5">Jugador que lavó</th>
+                  <th class="p-2.5">Juego</th>
+                  <th class="p-2.5 text-center">Estado</th>
+                  <th class="p-2.5">Fecha Devolución</th>
+                </tr>
+              </thead>
+              <tbody id="rep-camisetas-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PESTAÑA 6: TORNEO OFICIAL (+30 B) ==================== -->
+    <section id="tab-torneo" class="hidden space-y-4">
+      <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <div>
+              <h3 class="font-extrabold text-sm sm:text-base tracking-wide">Visor Oficial • Torneo Fútbol 7 (+30 Zona B)</h3>
+              <p class="text-xs text-slate-400">Tabla de Posiciones, Fixture y Goleadores en vivo</p>
+            </div>
+          </div>
+          <span class="text-xs font-semibold px-2.5 py-1 bg-slate-800 text-amber-400 border border-slate-700 rounded-lg">Complejo Club 12</span>
+        </div>
+        <div class="w-full h-[700px] bg-slate-100 relative">
+          <iframe src="https://club12lavuelta.com/futbol/zonam30b-f7#fecha1" class="w-full h-full border-0" loading="lazy"></iframe>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: AJUSTES DE VALORES Y PRECIOS -->
+  <div id="modal-precios" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-100">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">⚙️</span>
+          <h3 class="font-bold text-slate-900 text-base">Modificar Valores de Cuota</h3>
+        </div>
+        <button onclick="cerrarModalPrecios()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+      </div>
+      
+      <p class="text-xs text-slate-500 leading-relaxed">
+        Modificá los valores de cada concepto. Al guardar, se recalculará automáticamente la recaudación total del equipo.
+      </p>
+
+      <form onsubmit="guardarNuevosPrecios(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Inscripción por Jugador ($)</label>
+          <input id="cfg-precio-insc" type="number" required min="0" step="500" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-slate-900">
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1">Septiembre ($)</label>
+            <input id="cfg-precio-m1" type="number" required min="0" step="500" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 text-xs font-semibold focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1">Octubre ($)</label>
+            <input id="cfg-precio-m2" type="number" required min="0" step="500" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1">Noviembre ($)</label>
+            <input id="cfg-precio-m3" type="number" required min="0" step="500" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1">Diciembre ($)</label>
+            <input id="cfg-precio-m4" type="number" required min="0" step="500" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-slate-900">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-700 mb-1">Deuda exigible: automática según la fecha (vence el 10 de cada mes)</label>
+          <select id="cfg-mes-corte" disabled class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-semibold">
+            <option value="0">Solo inscripción</option><option value="1">Septiembre</option><option value="2">Octubre</option>
+            <option value="3">Noviembre</option><option value="4">Diciembre</option>
+          </select>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="cerrarModalPrecios()" class="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-sm">
+            Actualizar Tarifas
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL FICHA JUGADOR -->
+  <div id="modal-ficha" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">✏️</span>
+          <h3 class="font-bold text-slate-900 text-base">Ficha del Jugador</h3>
+        </div>
+        <button onclick="cerrarFicha()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+      </div>
+
+      <form onsubmit="guardarEdicionFicha(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="edit-j-idx">
+        
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Apellido y Nombre *</label>
+          <input id="edit-j-nombre" type="text" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-slate-900">
+        </div>
+        
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">DNI</label>
+            <input id="edit-j-dni" type="number" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Fecha Nacimiento</label>
+            <input id="edit-j-nacimiento" type="text" placeholder="DD/MM/AAAA" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Obra Social / Prepaga</label>
+            <input id="edit-j-obrasocial" type="text" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Celular de Contacto</label>
+            <input id="edit-j-celular" type="tel" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center justify-between border-t mt-4">
+          <a id="ficha-btn-wsp" href="#" target="_blank" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition">
+            💬 Abrir WhatsApp
+          </a>
+          <div class="flex gap-2">
+            <button type="button" onclick="cerrarFicha()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition">
+              Cancelar
+            </button>
+            <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition shadow-sm">
+              💾 Guardar Cambios
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: REPORTE DEUDAS (IMAGEN / PDF / WSP) -->
+  <div id="modal-deudas-reporte" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto">
+      
+      <!-- Encabezado Modal -->
+      <div class="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 flex-shrink-0">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">📸</span>
+          <div>
+            <h3 class="font-extrabold text-sm sm:text-base">Estado de Cuenta del Plantel (Mes Vencido)</h3>
+            <p class="text-[11px] text-slate-400">Generá la imagen o PDF para enviar al grupo de WhatsApp</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalReporteDeudas()" class="text-slate-400 hover:text-white font-bold text-2xl leading-none">&times;</button>
+      </div>
+
+      <!-- Barra de Botones de Acción -->
+      <div class="p-3 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="descargarImagenDeudas()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+            <span>📥 Descargar Imagen (PNG)</span>
+          </button>
+          <button onclick="compartirImagenWhatsApp()" class="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+            <span>💬 Compartir en WhatsApp</span>
+          </button>
+          <button onclick="imprimirPDFDeudas()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+            <span>🖨️ Guardar PDF</span>
+          </button>
+        </div>
+        <button onclick="copiarReporteDeudas()" class="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition">
+          <span>📋 Copiar Texto</span>
+        </button>
+      </div>
+
+      <!-- Contenedor del Flyer Diseñado para Captura -->
+      <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-50">
+        <div id="flyer-deudas-captura" class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm max-w-xl mx-auto space-y-4">
+          
+          <!-- Encabezado del Flyer -->
+          <div class="flex items-center justify-between border-b-2 border-slate-900 pb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-full border-2 border-amber-500 bg-white flex items-center justify-center font-black text-slate-900 text-sm">5D</div>
+              <div>
+                <h1 class="text-lg font-black uppercase tracking-wider text-slate-950 leading-tight">5DIGOS FÚTBOL CLUB</h1>
+                <p class="text-xs font-bold text-amber-600 uppercase tracking-wide">Estado de Cuenta del Plantel</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] bg-slate-900 text-white px-2 py-0.5 rounded font-black tracking-wider block mb-0.5">+30 ZONA B</span>
+              <span class="text-[11px] font-semibold text-slate-500" id="flyer-fecha-texto"></span>
+            </div>
+          </div>
+
+          <!-- Período Computado -->
+          <div class="bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex flex-wrap items-center justify-between text-xs text-amber-950 gap-2">
+            <span class="font-extrabold flex items-center gap-1">📌 Cuotas computadas (Mes vencido):</span>
+            <div class="flex items-center gap-2 text-[11px] font-bold">
+              <span>Inscripción: $12.000</span>
+              <span>•</span>
+              <span>Septiembre: $30.000</span>
+            </div>
+          </div>
+
+          <!-- Tabla Visual de Jugadores -->
+          <div class="overflow-hidden rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900 text-white font-bold text-[11px]">
+                <tr>
+                  <th class="py-2.5 px-3">Jugador</th>
+                  <th class="py-2.5 px-3 text-right">Abonado</th>
+                  <th class="py-2.5 px-3 text-center">Estado Vencido</th>
+                </tr>
+              </thead>
+              <tbody id="flyer-deudas-body" class="divide-y divide-slate-100 font-medium text-slate-800">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pie del Flyer -->
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span class="font-semibold text-slate-600">⚽ Torneo Fútbol 7 • Complejo Club 12</span>
+            <span>Coordinar con el encargado de cobros</span>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ESTA ES LA URL DE TU SCRIPT ACTUAL. NO LA CAMBIES SALVO QUE GENERES UNA NUEVA WEB APP.
+    const API_URL = "https://script.google.com/macros/s/AKfycbwfd1STLa5o7sRuvSH4DqO5cpIBxcNBAVkaTOZ4a-R0BVge3xodLeyGK2XcIn1-dMNtBw/exec";
+    let API_TOKEN = localStorage.getItem('5digos_token') || '';
+
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const uid = () => 'i' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3);
+    const fmt = v => Number(v || 0).toLocaleString('es-AR');
+    const monto = id => Number(String(document.getElementById(id).value).replace(/[.\s$]/g, '').replace(',', '.')) || 0;
+
+    // ===== Cuotas por mes. La cuota se paga del 1 al 10 de cada mes =====
+    const MES_NUM = [0, 9, 10, 11, 12], VENCE_DIA = 10;
+    const KEYS = ['inscripcion', 'mes1', 'mes2', 'mes3', 'mes4'];
+    const NOMBRES = ['Inscripción', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    function precioMes(m) { const p = state.precios; return Number(m === 0 ? p.inscripcion : p['mes' + m]); }
+    function mesActual() { const n = new Date().getMonth() + 1; let m = 0; for (let i = 1; i <= 4; i++) if (n >= MES_NUM[i]) m = i; return m; }
+    function vencida(m) { if (m === 0) return true; const h = new Date(); return h > new Date(h.getFullYear(), MES_NUM[m] - 1, VENCE_DIA, 23, 59, 59); }
+    function pagadoMes(j, m) { return j[KEYS[m]] ? precioMes(m) : Number((j.parciales || [])[m] || 0); }
+    function totalJ(j) { let t = Number(j.anterior || 0); for (let m = 0; m <= 4; m++) t += pagadoMes(j, m); return t; }
+    // Deuda de cada mes hasta "hasta"; el saldo viejo (columna G) se aplica primero a lo más antiguo
+    function debesHasta(j, hasta) {
+      let cred = Number(j.anterior || 0); const out = [];
+      for (let m = 0; m <= hasta; m++) { const base = sinDeuda(j, m) ? 0 : Math.max(0, precioMes(m) - pagadoMes(j, m)); const u = Math.min(cred, base); cred -= u; out.push(base - u); }
+      return out;
+    }
+    function sinDeuda(j, m) { return !!(j.exentos || [])[m]; }
+    function deudaJ(j) { return debesHasta(j, corte()).reduce((a, x) => a + x, 0); }
+    function gastosOrigen(o) { return (state.gastos || []).filter(g => g.origen === o).reduce((a, g) => a + Number(g.monto || 0), 0); }
+
+    let mesVista = Math.max(1, mesActual());
+    function notaMesActual(j) { return String((j.notas || [])[mesActual()] || ''); }
+    function aplicarVistaMes() {
+      state.jugadores.forEach(j => { j.pagoParcial = Number((j.parciales || [])[mesVista] || 0); j.obs = String((j.notas || [])[mesVista] || ''); j.acuerdoEspecial = sinDeuda(j, mesVista); });
+      const ch = document.getElementById('mes-chips');
+      if (ch) ch.innerHTML = [0, 1, 2, 3, 4].map(m => `<button onclick="setMesVista(${m})" class="px-3 py-2 rounded-xl text-xs font-bold border ${m === mesVista ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300'}">${NOMBRES[m]}${m === mesActual() ? ' •' : ''}</button>`).join('');
+      const th = document.getElementById('th-obs-mes'); if (th) th.textContent = '(' + NOMBRES[mesVista] + ')';
+    }
+    function setMesVista(m) { mesVista = m; aplicarVistaMes(); renderJugadores(); }
+    function resaltarMes() {
+      const t = document.getElementById('tabla-jugadores-body').closest('table'), c = mesVista + 2;
+      t.querySelectorAll('.mes-sel').forEach(e => e.classList.remove('mes-sel'));
+      t.querySelectorAll(`thead tr th:nth-child(${c}), tbody tr td:nth-child(${c})`).forEach(e => e.classList.add('mes-sel'));
+    }
+    function setParcialMes(id, m, valor) {
+      const j = state.jugadores.find(x => x.id === id); if (!j) return;
+      j.parciales = j.parciales || [0, 0, 0, 0, 0];
+      j.parciales[m] = Number(String(valor).replace(/[.\s]/g, '')) || 0;
+      if (m === mesActual()) j.pagoParcial = j.parciales[m];
+      guardarLocal(); renderTodo();
+      api({ action: 'actualizarParcialMes', id, mes: m, monto: j.parciales[m] });
+    }
+
+    function estadoCelda(j, m) {
+      if (j[KEYS[m]]) return 'ok';
+      if (sinDeuda(j, m)) return 'exento';
+      if (Number((j.parciales || [])[m] || 0) > 0) return 'parcial';
+      if (m > mesActual()) return 'futuro';
+      return vencida(m) ? 'no' : 'pend';
+    }
+    function renderReporteMensual() {
+      const sel = document.getElementById('rm-mes'); if (!sel) return;
+      if (!sel.options.length) { for (let m = 1; m <= 4; m++) sel.add(new Option(NOMBRES[m] + (m === mesActual() ? ' (mes en curso)' : ''), m)); sel.add(new Option('📊 Reporte general', 'g')); sel.value = Math.max(1, mesActual()); }
+      const mSel = sel.value === 'g' ? -1 : Number(sel.value);
+      const exentos = mSel < 0 ? [] : state.jugadores.filter(j => sinDeuda(j, mSel)), activos = mSel < 0 ? state.jugadores : state.jugadores.filter(j => !sinDeuda(j, mSel));
+      const nota = exentos.length ? `<br>🤝 Sin deuda este mes: ${exentos.map(j => esc(j.nombre)).join(' · ')}` : '';
+      const k = (t, v, c) => `<div class="rounded-xl border border-slate-200 p-2.5"><div class="text-[10px] font-bold text-slate-500 uppercase">${t}</div><div class="text-lg font-black ${c}">${v}</div></div>`;
+      const head = document.getElementById('rm-head'), body = document.getElementById('rm-body'), th = 'py-3 px-3';
+      if (sel.value === 'g') {
+        const filas = activos.map(j => ({ j, celdas: [0, 1, 2, 3, 4].map(m => estadoCelda(j, m)), debe: deudaJ(j) })).sort((a, b) => b.debe - a.debe || a.j.nombre.localeCompare(b.j.nombre, 'es'));
+        const alDia = filas.filter(f => f.debe === 0).length, deuda = filas.reduce((a, f) => a + f.debe, 0), ic = { ok: '✅', parcial: '🟡', no: '🔴', pend: '⏳', futuro: '·', exento: '🤝' };
+        document.getElementById('rm-sub').innerHTML = `Estado de todas las cuotas hasta hoy (✅ pagó · 🟡 parcial · 🔴 debe · ⏳ en plazo · 🤝 sin deuda · · mes próximo)${nota}`;
+        document.getElementById('rm-kpis').innerHTML = k('Al día', `${alDia} de ${filas.length}`, 'text-emerald-600') + k('Con deuda', filas.length - alDia, 'text-rose-600') + k('Deuda total', '$' + fmt(deuda), 'text-rose-600');
+        head.innerHTML = `<tr><th class="${th}">Jugador</th>${[0, 1, 2, 3, 4].map(m => `<th class="${th} text-center">${['Insc', 'Sep', 'Oct', 'Nov', 'Dic'][m]}</th>`).join('')}<th class="${th} text-right">Debe hoy</th></tr>`;
+        body.innerHTML = filas.map(f => `<tr><td class="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap">${esc(f.j.nombre)}</td>${f.celdas.map(c => `<td class="py-2.5 px-3 text-center">${ic[c]}</td>`).join('')}<td class="py-2.5 px-3 text-right font-bold ${f.debe ? 'text-rose-700' : 'text-slate-400'}">${f.debe ? '$' + fmt(f.debe) : '—'}</td></tr>`).join('');
+        renderReporteMensual.datos = { modo: 'g', filas, alDia };
+        return;
+      }
+      const m = Number(sel.value), venc = vencida(m), pr = precioMes(m), mm = String(MES_NUM[m]).padStart(2, '0');
+      const filas = activos.map(j => {
+        const pag = pagadoMes(j, m), debe = Math.max(0, pr - pag), e = estadoCelda(j, m);
+        const est = { ok: ['✅ Pagó', 'bg-emerald-100 text-emerald-800'], parcial: ['🟡 Parcial', 'bg-amber-100 text-amber-800'], no: ['🔴 No pagó', 'bg-rose-100 text-rose-800'], pend: ['⏳ Todavía no pagó', 'bg-sky-100 text-sky-800'], futuro: ['⏳ Mes próximo', 'bg-slate-100 text-slate-600'] }[e];
+        return { j, debe, pag, est, e };
+      }).sort((a, b) => (b.debe > 0) - (a.debe > 0) || a.j.nombre.localeCompare(b.j.nombre, 'es'));
+      const esperado = pr * filas.length, cobrado = filas.reduce((a, f) => a + f.pag, 0), pagaron = filas.filter(f => f.debe === 0).length;
+      document.getElementById('rm-sub').innerHTML = `${NOMBRES[m]}: cuota de <b>$${fmt(pr)}</b>, se paga del <b>1 al ${VENCE_DIA}/${mm}</b> · ${venc ? '<b class="text-rose-600">plazo vencido</b>' : 'dentro del plazo'}${nota}`;
+      document.getElementById('rm-kpis').innerHTML = k('Pagaron', `${pagaron} de ${filas.length}`, 'text-emerald-600') + k('Faltan', filas.length - pagaron, 'text-rose-600') + k('Cobrado', '$' + fmt(cobrado), 'text-slate-800') + k('Pendiente', '$' + fmt(esperado - cobrado), 'text-rose-600');
+      head.innerHTML = `<tr><th class="${th}">Jugador</th><th class="${th}">Estado</th><th class="${th} text-right">Debe del mes</th><th class="${th} no-print">Pago parcial ($)</th></tr>`;
+      body.innerHTML = filas.map(f => `<tr><td class="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap">${esc(f.j.nombre)}</td>
+        <td class="py-2.5 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${f.est[1]}">${f.est[0]}</span></td>
+        <td class="py-2.5 px-3 text-right text-rose-700 font-bold">${f.debe ? '$' + fmt(f.debe) : '—'}</td>
+        <td class="py-2.5 px-3 no-print">${f.j[KEYS[m]] ? '<span class="text-xs text-slate-400">—</span>' : `<input type="number" min="0" step="500" value="${(f.j.parciales || [])[m] || ''}" placeholder="0" onchange="setParcialMes('${f.j.id}',${m},this.value)" class="w-24 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-right">`}</td></tr>`).join('');
+      renderReporteMensual.datos = { modo: 'm', m, venc, pr, filas, pagaron };
+    }
+    
+    // Imagen para el grupo: solo estados de pago, sin montos ni datos de caja
+    async function generarImagenReporte() {
+      const d = renderReporteMensual.datos; if (!d) return;
+      const logo = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = document.querySelector('header img').src; });
+      const W = 1080, rowH = 84, headH = 290, gen = d.modo === 'g', H = headH + (gen ? 80 : 0) + d.filas.length * rowH + 130;
+      const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+      const AZ = '#1e2d66', CR = '#f4efe0', F = 'system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif', hoy = new Date().toLocaleDateString('es-AR');
+      x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.fillStyle = AZ; x.fillRect(0, 0, W, headH); x.textBaseline = 'middle';
+      if (logo) { x.save(); x.beginPath(); x.arc(150, 145, 92, 0, 7); x.clip(); x.drawImage(logo, 58, 53, 184, 184); x.restore(); x.strokeStyle = CR; x.lineWidth = 6; x.beginPath(); x.arc(150, 145, 92, 0, 7); x.stroke(); }
+      x.fillStyle = CR; x.font = `800 54px ${F}`; x.fillText(gen ? 'ESTADO DE CUOTAS' : 'CUOTA DE ' + NOMBRES[d.m].toUpperCase(), 280, 105);
+      x.fillStyle = '#d7dcf0'; x.font = `500 30px ${F}`; x.fillText('5DIGOS F.C.  ·  Complejo Club 12', 280, 168);
+      x.font = `600 30px ${F}`; x.fillText(gen ? 'Actualizado al ' + hoy : `Se paga del 1 al ${VENCE_DIA} de ${NOMBRES[d.m].toLowerCase()}`, 280, 220);
+      let y = headH;
+      const cols = [0, 1, 2, 3, 4].map(i => 560 + i * 100);
+      const glifo = (cx, cy, e) => {
+        const col = { ok: '#059669', parcial: '#f59e0b', no: '#e11d48', exento: '#94a3b8' }[e];
+        if (e === 'futuro') { x.fillStyle = '#cbd5e1'; x.beginPath(); x.arc(cx, cy, 6, 0, 7); x.fill(); return; }
+        if (e === 'pend') { x.strokeStyle = '#38bdf8'; x.lineWidth = 5; x.beginPath(); x.arc(cx, cy, 20, 0, 7); x.stroke(); return; }
+        x.fillStyle = col; x.beginPath(); x.arc(cx, cy, 24, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 6; x.lineCap = 'round'; x.lineJoin = 'round'; x.beginPath();
+        if (e === 'ok') { x.moveTo(cx - 11, cy); x.lineTo(cx - 3, cy + 9); x.lineTo(cx + 12, cy - 9); } else if (e === 'no') { x.moveTo(cx - 9, cy - 9); x.lineTo(cx + 9, cy + 9); x.moveTo(cx + 9, cy - 9); x.lineTo(cx - 9, cy + 9); } else { x.moveTo(cx - 10, cy); x.lineTo(cx + 10, cy); }
+        x.stroke();
+      };
+      if (gen) {
+        x.fillStyle = '#eef2ff'; x.fillRect(0, y, W, 80); x.fillStyle = AZ; x.font = `800 26px ${F}`; x.textAlign = 'center';
+        ['INSC', 'SEP', 'OCT', 'NOV', 'DIC'].forEach((t, i) => x.fillText(t, cols[i], y + 40)); x.textAlign = 'left'; x.fillText('JUGADOR', 50, y + 40); y += 80;
+      }
+      d.filas.forEach((f, i) => {
+        if (i % 2 === 0) { x.fillStyle = '#f8fafc'; x.fillRect(0, y, W, rowH); }
+        x.fillStyle = '#0f172a'; x.font = `600 34px ${F}`; x.textAlign = 'left';
+        let nom = f.j.nombre; const maxW = gen ? 470 : 600; while (x.measureText(nom).width > maxW && nom.length > 4) nom = nom.slice(0, -2); if (nom !== f.j.nombre) nom += '…';
+        x.fillText(nom, 50, y + rowH / 2);
+        if (gen) f.celdas.forEach((e, k) => glifo(cols[k], y + rowH / 2, e));
+        else {
+          const st = { ok: ['PAGÓ', '#059669', '#d1fae5'], parcial: ['PARCIAL', '#b45309', '#fef3c7'], no: ['NO PAGÓ', '#be123c', '#ffe4e6'], pend: ['PENDIENTE', '#0369a1', '#e0f2fe'], futuro: ['PRÓXIMO', '#475569', '#f1f5f9'] }[f.e];
+          x.font = `800 28px ${F}`; const w = x.measureText(st[0]).width + 56, px = W - 50 - w;
+          x.fillStyle = st[2]; x.beginPath(); x.roundRect(px, y + 16, w, 52, 26); x.fill(); x.fillStyle = st[1]; x.textAlign = 'center'; x.fillText(st[0], px + w / 2, y + rowH / 2 + 1); x.textAlign = 'left';
+        }
+        y += rowH;
+      });
+      x.fillStyle = AZ; x.fillRect(0, y + 10, W, H - y - 10); x.fillStyle = CR; x.textAlign = 'center'; x.font = `800 34px ${F}`;
+      x.fillText(gen ? `Al día: ${d.alDia} de ${d.filas.length} jugadores` : `Pagaron ${d.pagaron} de ${d.filas.length}`, W / 2, y + 62); x.font = `500 24px ${F}`; x.fillStyle = '#d7dcf0';
+      x.fillText(gen ? 'Verde: pagó · Amarillo: parcial · Rojo: debe · Celeste: en plazo · Gris: sin deuda' : 'Generado el ' + hoy, W / 2, y + 102);
+      const nombre = gen ? '5DIGOS-estado-cuotas' : '5DIGOS-cuota-' + NOMBRES[d.m].toLowerCase(), url = c.toDataURL('image/png');
+      mostrarImagenModal(url, nombre);
+    }
+    function mostrarImagenModal(url, nombre) {
+      document.getElementById('img-modal')?.remove();
+      const md = document.createElement('div'); md.id = 'img-modal'; md.className = 'fixed inset-0 z-[70] bg-black/75 flex flex-col items-center justify-center p-3 gap-3';
+      md.innerHTML = `<img src="${url}" class="max-h-[74vh] max-w-full rounded-xl shadow-2xl bg-white"><div class="flex gap-2 flex-wrap justify-center"><button id="im-share" class="bg-emerald-600 text-white font-bold text-sm px-4 py-3 rounded-xl">📤 Compartir</button><button id="im-dl" class="bg-white text-slate-800 font-bold text-sm px-4 py-3 rounded-xl">⬇️ Descargar</button><button id="im-x" class="bg-slate-700 text-white font-bold text-sm px-4 py-3 rounded-xl">Cerrar</button></div>`;
+      document.body.appendChild(md);
+      md.querySelector('#im-x').onclick = () => md.remove();
+      md.querySelector('#im-dl').onclick = () => { const a = document.createElement('a'); a.href = url; a.download = nombre + '.png'; a.click(); };
+      md.querySelector('#im-share').onclick = async () => {
+        try { const f = new File([await (await fetch(url)).blob()], nombre + '.png', { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+        md.querySelector('#im-dl').click(); toast('Imagen descargada: adjuntala en el grupo');
+      };
+    }
+
+    function copiarReporteMensual() {
+      const d = renderReporteMensual.datos; if (!d) return; let t;
+      if (d.modo === 'g') {
+        const deb = d.filas.filter(f => f.debe > 0);
+        t = `📊 *ESTADO DE CUOTAS - 5DIGOS F.C.*\n✅ Al día: ${d.alDia} de ${d.filas.length}\n` + (deb.length ? `\n*Con deuda:*\n` + deb.map(f => `• ${f.j.nombre}: $${fmt(f.debe)}`).join('\n') + '\n' : `\n🎉 ¡Todos al día!\n`);
+      } else {
+        const mm = String(MES_NUM[d.m]).padStart(2, '0'), falta = d.filas.filter(f => f.debe > 0);
+        t = `📅 *CUOTA DE ${NOMBRES[d.m].toUpperCase()} - 5DIGOS F.C.*\nSe paga del 1 al ${VENCE_DIA}/${mm} (${d.venc ? 'plazo VENCIDO' : 'dentro del plazo'})\n\n✅ Pagaron: ${d.pagaron} de ${d.filas.length}\n`;
+        t += falta.length ? `\n*Todavía no pagaron:*\n` + falta.map(f => `• ${f.j.nombre}${f.pag > 0 ? ' (parcial)' : ''}`).join('\n') + '\n' : `\n🎉 ¡Todos pagaron el mes!\n`;
+      }
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('📋 Texto copiado')).catch(() => toast('No se pudo copiar', true));
+    }
+
+    function datosLavado() {
+      const lav = c => String(c.estado || '').toLowerCase().includes('lavado');
+      const parseF = v => { const m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return new Date(+m[3], +m[2] - 1, +m[1]); const d = new Date(v); return isNaN(d) ? null : d; };
+      const rank = { tiene: 0, no: 1, lavo: 2 };
+      return state.jugadores.map(j => {
+        const reg = (state.camisetas || []).filter(c => c.jugador === j.nombre), tiene = reg.some(lav), hechas = reg.filter(c => !lav(c)).length;
+        const f = reg.map(c => parseF(c.fecha)).filter(Boolean).sort((a, b) => b - a)[0];
+        return { j, tiene, hechas, ultima: f ? f.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '', e: tiene ? 'tiene' : hechas > 0 ? 'lavo' : 'no' };
+      }).sort((a, b) => rank[a.e] - rank[b.e] || (a.e === 'lavo' ? a.hechas - b.hechas : 0) || a.j.nombre.localeCompare(b.j.nombre, 'es'));
+    }
+    function copiarTextoLavado() {
+      const d = datosLavado(), l = (e, f) => d.filter(x => x.e === e).map(f).join('\n');
+      let t = `🧺 *LAVADO DE CAMISETAS - 5DIGOS F.C.*\n`;
+      const tiene = l('tiene', x => `• ${x.j.nombre}`), no = l('no', x => `• ${x.j.nombre}`), lavo = l('lavo', x => `• ${x.j.nombre} (${x.hechas} ${x.hechas === 1 ? 'vez' : 'veces'})`);
+      if (tiene) t += `\n👕 *Las tiene ahora:*\n${tiene}\n`; if (no) t += `\n⏳ *Todavía no lavaron:*\n${no}\n`; if (lavo) t += `\n✅ *Ya lavaron:*\n${lavo}\n`;
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('📋 Texto copiado')).catch(() => toast('No se pudo copiar', true));
+    }
+    async function generarImagenLavado() {
+      const d = datosLavado(); if (!d.length) return toast('No hay jugadores cargados', true);
+      const logo = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = document.querySelector('header img').src; });
+      const W = 1080, rowH = 98, headH = 290, H = headH + d.length * rowH + 140, hoy = new Date().toLocaleDateString('es-AR');
+      const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+      const AZ = '#1e2d66', CR = '#f4efe0', F = 'system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
+      x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.fillStyle = AZ; x.fillRect(0, 0, W, headH); x.textBaseline = 'middle';
+      if (logo) { x.save(); x.beginPath(); x.arc(150, 145, 92, 0, 7); x.clip(); x.drawImage(logo, 58, 53, 184, 184); x.restore(); x.strokeStyle = CR; x.lineWidth = 6; x.beginPath(); x.arc(150, 145, 92, 0, 7); x.stroke(); }
+      x.fillStyle = CR; x.font = `800 52px ${F}`; x.fillText('LAVADO DE CAMISETAS', 280, 105);
+      x.fillStyle = '#d7dcf0'; x.font = `500 30px ${F}`; x.fillText('5DIGOS F.C.  ·  Complejo Club 12', 280, 168);
+      x.font = `600 30px ${F}`; x.fillText('Actualizado al ' + hoy, 280, 220);
+      const st = { tiene: ['LAS TIENE', '#b45309', '#fef3c7'], no: ['TODAVÍA NO', '#be123c', '#ffe4e6'], lavo: ['LAVÓ', '#059669', '#d1fae5'] };
+      let y = headH;
+      d.forEach((f, i) => {
+        if (i % 2 === 0) { x.fillStyle = '#f8fafc'; x.fillRect(0, y, W, rowH); }
+        let nom = f.j.nombre; x.font = `700 34px ${F}`; while (x.measureText(nom).width > 560 && nom.length > 4) nom = nom.slice(0, -2); if (nom !== f.j.nombre) nom += '…';
+        x.fillStyle = '#0f172a'; x.textAlign = 'left'; x.fillText(nom, 50, y + 36);
+        x.fillStyle = '#64748b'; x.font = `500 23px ${F}`;
+        x.fillText(f.hechas ? `Lavó ${f.hechas} ${f.hechas === 1 ? 'vez' : 'veces'}${f.ultima ? ' · última entrega ' + f.ultima : ''}` : (f.tiene ? 'Primera vez' : 'Todavía no le tocó'), 50, y + 72);
+        const lab = f.e === 'lavo' ? `LAVÓ · ${f.hechas}` : st[f.e][0]; x.font = `800 27px ${F}`; const w = x.measureText(lab).width + 56, px = W - 50 - w;
+        x.fillStyle = st[f.e][2]; x.beginPath(); x.roundRect(px, y + 23, w, 52, 26); x.fill(); x.fillStyle = st[f.e][1]; x.textAlign = 'center'; x.fillText(lab, px + w / 2, y + rowH / 2 + 1);
+        y += rowH;
+      });
+      const ya = d.filter(f => f.e === 'lavo').length, tienen = d.filter(f => f.e === 'tiene').map(f => f.j.nombre.split(',')[0]);
+      x.fillStyle = AZ; x.fillRect(0, y + 10, W, H - y - 10); x.fillStyle = CR; x.textAlign = 'center'; x.font = `800 34px ${F}`;
+      x.fillText(`Ya lavaron: ${ya} de ${d.length}`, W / 2, y + 62); x.font = `500 24px ${F}`; x.fillStyle = '#d7dcf0';
+      x.fillText(tienen.length ? 'Las tiene ahora: ' + tienen.join(', ') : 'Generado el ' + hoy, W / 2, y + 104);
+      mostrarImagenModal(c.toDataURL('image/png'), '5DIGOS-lavado-camisetas');
+    }
+
+    // ===== Gastos extras =====
+    function agregarGasto(e) {
+      e.preventDefault();
+      const f = document.getElementById('gx-fecha').value, detalle = document.getElementById('gx-detalle').value.trim(), m = monto('gx-monto');
+      if (!detalle || m <= 0) return toast('Completá detalle y monto', true);
+      const g = { id: uid(), fecha: f ? f.split('-').reverse().join('/') : new Date().toLocaleDateString('es-AR'), detalle, monto: m, origen: document.getElementById('gx-origen').value };
+      (state.gastos = state.gastos || []).unshift(g);
+      document.getElementById('gx-detalle').value = ''; document.getElementById('gx-monto').value = '';
+      guardarLocal(); renderTodo(); api({ action: 'agregarGasto', ...g });
+    }
+    function eliminarGasto(id) {
+      if (!confirm('¿Eliminar este gasto? El monto vuelve a sumarse a la caja.')) return;
+      state.gastos = (state.gastos || []).filter(g => g.id !== id); guardarLocal(); renderTodo(); api({ action: 'eliminarGasto', id });
+    }
+    function renderGastos() {
+      const b = document.getElementById('tabla-gastos-body'); if (!b) return;
+      b.innerHTML = (state.gastos || []).map(x => `<tr><td class="py-3 px-4 text-xs text-slate-500 whitespace-nowrap">${esc(x.fecha)}</td><td class="py-3 px-4 font-medium">${esc(x.detalle)}</td>
+        <td class="py-3 px-4 text-xs whitespace-nowrap">${x.origen === 'extras' ? '💰 Ingresos extras' : '🏦 Fondo general'}</td><td class="py-3 px-4 text-right font-bold text-rose-600 whitespace-nowrap">-$${fmt(x.monto)}</td>
+        <td class="py-3 px-3 text-center no-print"><button onclick="eliminarGasto('${x.id}')" class="text-rose-500 font-bold px-2 py-1">✕</button></td></tr>`).join('') || '<tr><td colspan="5" class="py-6 text-center text-slate-400 text-xs">Todavía no hay gastos cargados.</td></tr>';
+      const ing = (state.remanentes || []).reduce((a, r) => a + Number(r.monto || 0), 0), gE = gastosOrigen('extras'), gF = gastosOrigen('fondo');
+      document.getElementById('gx-resumen').innerHTML = `Ingresos extras: <b>$${fmt(ing)}</b> · Gastado de extras: <b class="text-rose-600">-$${fmt(gE)}</b> · <b class="text-indigo-700">Disponible en extras: $${fmt(ing - gE)}</b> · Gastos del fondo general: <b class="text-rose-600">-$${fmt(gF)}</b>`;
+    }
+
+    // ===== Cumpleaños =====
+    const tcase = t => t.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+    function nombreBonito(n) { const [ap, no] = String(n).split(','); return no ? tcase(no.trim().split(' ')[0] + ' ' + ap.trim()) : tcase(String(n)); }
+    function primerNombre(n) { const no = String(n).split(',')[1]; return tcase((no || n).trim().split(' ')[0]); }
+    function proxCumple(j) {
+      let m = String(j.cumple || '').match(/^(\d{2})\/(\d{2})$/), y = (String(j.nacimiento || '').match(/(\d{4})\s*$/) || [])[1];
+      if (!m) { const n = String(j.nacimiento || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (!n) return null; m = n; y = n[3]; }
+      const d = +m[1], mes = +m[2], hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const f = a => { const bis = (a % 4 === 0 && a % 100 !== 0) || a % 400 === 0; return new Date(a, mes - 1, d === 29 && mes === 2 && !bis ? 28 : d); };
+      let fecha = f(hoy.getFullYear()); if (fecha < hoy) fecha = f(hoy.getFullYear() + 1);
+      return { j, fecha, dias: Math.round((fecha - hoy) / 86400000), edad: y ? fecha.getFullYear() - Number(y) : null };
+    }
+    const listaCumples = () => state.jugadores.map(proxCumple).filter(Boolean).sort((a, b) => a.dias - b.dias);
+    function renderCumples() {
+      const el = document.getElementById('cumple-banner'); if (!el) return;
+      const hoyKey = new Date().toLocaleDateString('en-CA'), cerca = listaCumples().filter(x => x.dias <= 7);
+      if (!cerca.length || localStorage.getItem('5digos_cumple_oculto') === hoyKey) { el.className = 'hidden'; return; }
+      const hoy = cerca.filter(x => x.dias === 0), prox = cerca.filter(x => x.dias > 0), txt = [];
+      if (hoy.length) txt.push(`🎂 ¡Hoy cumple <b>${hoy.map(x => esc(nombreBonito(x.j.nombre))).join(' y ')}</b>!`);
+      if (prox.length) txt.push(`🎈 ${hoy.length ? 'Más adelante' : 'Cumple pronto'}: ${prox.map(x => `<b>${esc(nombreBonito(x.j.nombre))}</b> (${x.dias === 1 ? 'mañana' : 'en ' + x.dias + ' días'})`).join(' · ')}`);
+      el.className = 'bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl p-3 flex items-start gap-2 text-sm no-print';
+      el.innerHTML = `<div class="flex-1 space-y-1">${txt.map(t => `<div>${t}</div>`).join('')}</div><button onclick="abrirCumples()" class="shrink-0 bg-amber-500 text-white font-bold text-xs px-3 py-2 rounded-xl">Ver</button><button onclick="localStorage.setItem('5digos_cumple_oculto','${hoyKey}');renderCumples()" class="shrink-0 text-amber-700 font-bold px-2 py-1" title="Ocultar por hoy">✕</button>`;
+    }
+    function abrirCumples() {
+      document.getElementById('cumple-modal')?.remove();
+      const filas = listaCumples().map(x => {
+        const cel = String(x.j.celular || '').replace(/\D/g, '').replace(/^0/, ''), nom = primerNombre(x.j.nombre);
+        const wa = cel && rolActual === 'admin' ? `<a class="px-2.5 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold" target="_blank" rel="noopener" href="https://wa.me/549${cel}?text=${encodeURIComponent('¡Feliz cumple, ' + nom + '! 🎉 Te saludamos de parte de todo 5DIGOS F.C. 💙⚽')}">💬</a>` : '';
+        const cuando = x.dias === 0 ? '<b class="text-rose-600">¡HOY!</b>' : x.dias === 1 ? '<b class="text-amber-600">mañana</b>' : `en ${x.dias} días`;
+        return `<div class="flex items-center gap-2 py-2.5 border-b border-slate-100"><div class="flex-1 min-w-0"><div class="font-bold text-slate-900 text-sm truncate">${esc(nombreBonito(x.j.nombre))}</div>
+          <div class="text-xs text-slate-500">${x.fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })} · ${cuando}${x.edad ? ` · cumple ${x.edad}` : ''}</div></div>
+          <button onclick="saludoCumple('${x.j.id}')" class="px-2.5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold">🖼️</button>${wa}</div>`;
+      }).join('') || '<p class="text-sm text-slate-500 py-4 text-center">Todavía no hay fechas de nacimiento cargadas en las fichas.</p>';
+      const m = document.createElement('div'); m.id = 'cumple-modal'; m.className = 'fixed inset-0 z-[65] bg-black/60 flex items-end sm:items-center justify-center p-3';
+      m.innerHTML = `<div class="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col"><div class="flex items-center justify-between p-4 border-b border-slate-100"><h3 class="font-bold text-slate-800">🎂 Cumpleaños</h3><button onclick="document.getElementById('cumple-modal').remove()" class="text-slate-500 font-bold px-2">✕</button></div><div class="overflow-y-auto px-4 pb-3">${filas}</div><p class="text-[11px] text-slate-400 px-4 pb-3">🖼️ arma una imagen de saludo para el grupo.</p></div>`;
+      m.onclick = e => { if (e.target === m) m.remove(); };
+      document.body.appendChild(m);
+    }
+    async function saludoCumple(id) {
+      const j = state.jugadores.find(x => x.id === id); if (!j) return;
+      const logo = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = document.querySelector('header img').src; });
+      const W = 1080, c = document.createElement('canvas'); c.width = c.height = W; const x = c.getContext('2d'), F = 'system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
+      const g = x.createLinearGradient(0, 0, 0, W); g.addColorStop(0, '#2a3f8f'); g.addColorStop(1, '#16214d'); x.fillStyle = g; x.fillRect(0, 0, W, W);
+      let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, cols = ['#f4efe0', '#fbbf24', '#ffffff', '#818cf8', '#f472b6', '#34d399'];
+      for (let k = 0; k < 90; k++) { const px = rnd() * W, py = rnd() * W; if (py > 515 && py < 835) continue; x.save(); x.translate(px, py); x.rotate(rnd() * 6.28); x.fillStyle = cols[k % cols.length]; x.globalAlpha = .85; x.fillRect(-9, -5, 18, 10 + rnd() * 8); x.restore(); }
+      x.globalAlpha = 1; x.textAlign = 'center'; x.textBaseline = 'middle';
+      if (logo) { x.save(); x.beginPath(); x.arc(540, 285, 170, 0, 7); x.clip(); x.drawImage(logo, 370, 115, 340, 340); x.restore(); x.strokeStyle = '#f4efe0'; x.lineWidth = 10; x.beginPath(); x.arc(540, 285, 170, 0, 7); x.stroke(); }
+      x.fillStyle = '#f4efe0'; x.font = `800 78px ${F}`; x.fillText('¡FELIZ CUMPLEAÑOS!', 540, 590);
+      const nom = primerNombre(j.nombre).toUpperCase(); let fs = 150; do { x.font = `900 ${fs}px ${F}`; fs -= 6; } while (x.measureText(nom).width > 920 && fs > 50);
+      x.fillStyle = '#fbbf24'; x.fillText(nom, 540, 750);
+      x.fillStyle = '#d7dcf0'; x.font = `500 38px ${F}`; x.fillText('De parte de todo el plantel', 540, 885);
+      x.fillStyle = '#f4efe0'; x.font = `800 36px ${F}`; x.fillText('5DIGOS F.C.  ·  2023', 540, 960);
+      mostrarImagenModal(c.toDataURL('image/png'), '5DIGOS-saludo-' + nom.toLowerCase());
+    }
+
+    let rolActual = 'admin', instalarEvt = null;
+    function setRol(r) { rolActual = r || 'admin'; try { localStorage.setItem('5digos_rol', rolActual); } catch (e) {} document.body.classList.toggle('solo-lectura', rolActual === 'lectura'); }
+
+    // ===== Cambios sin conexión: se guardan en el teléfono y se envían apenas hay señal =====
+    const COLA_KEY = '5digos_cola';
+    const getCola = () => { try { return JSON.parse(localStorage.getItem(COLA_KEY) || '[]'); } catch (e) { return []; } };
+    const setCola = c => { localStorage.setItem(COLA_KEY, JSON.stringify(c)); actualizarBadgeCola(); };
+    function actualizarBadgeCola() {
+      let b = document.getElementById('cola-badge'); const n = getCola().length;
+      if (!b) { b = document.createElement('button'); b.id = 'cola-badge'; b.className = 'hidden fixed top-16 right-3 z-[55] bg-amber-500 text-slate-900 text-[11px] font-black px-3 py-1.5 rounded-full shadow-lg no-print'; b.onclick = () => flushCola(); document.body.appendChild(b); }
+      b.classList.toggle('hidden', n === 0); b.textContent = `📴 ${n} sin enviar · tocá para reintentar`;
+    }
+    async function enviar(payload) {
+      let res;
+      try { res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...payload, token: API_TOKEN }) }); }
+      catch (err) { return { ok: false, red: true }; }                      // sin señal: se reintenta después
+      try { const d = await res.json(); return d.status === 'ok' ? { ok: true } : { ok: false, msg: d.message || 'Error del servidor' }; }
+      catch (err) { return { ok: false, msg: 'el servidor devolvió una respuesta inválida' }; }   // no se queda trabado en la cola
+    }
+    let enviando = false;
+    async function flushCola() {
+      if (enviando) return; enviando = true; let hubo = false;
+      try {
+        const cola = getCola();
+        while (cola.length) {
+          const r = await enviar(cola[0]);
+          if (r.red) { toast('📴 Sin conexión: los cambios se enviarán cuando vuelva la señal', true); break; }
+          if (r.ok) { cola.shift(); setCola(cola); continue; }
+          if (r.msg === 'unauthorized') { localStorage.removeItem('5digos_token'); API_TOKEN = ''; toast('Clave incorrecta: tocá 🔄 e ingresala de nuevo', true); break; }
+          cola.shift(); setCola(cola); hubo = true;
+          toast(r.msg === 'solo lectura' ? 'Tu clave es de solo lectura: ese cambio no se guardó' : '⚠️ No se pudo guardar (' + r.msg + ')', true);
+        }
+      } finally { enviando = false; actualizarBadgeCola(); }
+      if (hubo) setTimeout(() => cargarDatos(true), 2500);   // da tiempo a leer el aviso antes de resincronizar
+    }
+    async function api(payload) { const c = getCola(); c.push(payload); setCola(c); return flushCola(); }
+    
+
+    
+
+    function toast(msg, error, fijo) {
+      let t = document.getElementById('toast');
+      if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+      t.textContent = msg;
+      t.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg no-print ' + (error ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white');
+      clearTimeout(toast.t);
+      if (!fijo) toast.t = setTimeout(() => t.classList.add('hidden'), error ? 6000 : 2500);
+    }
+
+    function pedirToken() {
+      const t = prompt('Ingresá la clave del equipo (te la da el tesorero):');
+      if (t) { API_TOKEN = t.trim(); localStorage.setItem('5digos_token', API_TOKEN); }
+      return !!API_TOKEN;
+    }
+
+    // Envía un cambio a la planilla y confirma que realmente se guardó
+    
+
+    // Deuda exigible según el "mes de corte" configurado (0 = solo inscripción, 1 = hasta Sept, ... 4 = hasta Dic)
+    const MESES_CORTO = ['Sep', 'Oct', 'Nov', 'Dic'];
+    function corte() { let c = 0; for (let m = 1; m <= 4; m++) if (vencida(m)) c = m; return c; }
+    function exigible(p) { p = p || state.precios; let t = Number(p.inscripcion); for (let i = 1; i <= corte(p); i++) t += Number(p['mes' + i]); return t; }
+    function textoExigible(p) {
+      p = p || state.precios;
+      const partes = [`Inscripción ($${Number(p.inscripcion).toLocaleString('es-AR')})`];
+      for (let i = 1; i <= corte(p); i++) partes.push(`${MESES_CORTO[i-1]} ($${Number(p['mes'+i]).toLocaleString('es-AR')})`);
+      return partes.join(' + ');
+    }
+    function pendientes(j) {
+      const out = [];
+      for (let m = 0; m <= corte(); m++) if (!sinDeuda(j, m) && !j[KEYS[m]]) out.push(m === 0 ? 'Inscrip' : MESES_CORTO[m - 1]);
+      return out;
+    }
+
+    let state = JSON.parse(localStorage.getItem('5digos_fc_db_v13')) || {
+      precios: {
+        inscripcion: 12000,
+        mes1: 30000,
+        mes2: 30000,
+        mes3: 30000,
+        mes4: 30000
+      },
+      jugadores: [],
+      camisetas: [],
+      remanentes: [],
+      gastosLiga: []
+    };
+
+    function guardarLocal() {
+      localStorage.setItem('5digos_fc_db_v13', JSON.stringify(state));
+      renderTodo();
+    }
+
+    document.getElementById('print-fecha-hora').innerText = `${new Date().toLocaleDateString('es-AR')} - ${new Date().toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}`;
+    document.getElementById('cam-fecha').valueAsDate = new Date();
+    document.getElementById('rem-fecha').valueAsDate = new Date();
+    document.getElementById('liga-fecha').valueAsDate = new Date();
+
+    async function cargarDatos(silencioso) {
+      if (!API_TOKEN && !pedirToken()) { renderTodo(); return; }
+      if (getCola().length) { await flushCola(); if (getCola().length) { toast('Hay cambios sin enviar: se muestran los datos de este dispositivo', true); renderTodo(); return; } }
+      toast('🔄 Sincronizando…', false, true);
+      try {
+        const res = await fetch(`${API_URL}?datos=json&token=${encodeURIComponent(API_TOKEN)}`);
+        const data = await res.json();
+        if (data.error === 'unauthorized') {
+          localStorage.removeItem('5digos_token'); API_TOKEN = '';
+          toast('Clave incorrecta. Tocá 🔄 para reintentar.', true); renderTodo(); return;
+        }
+        if (data.error) throw new Error(data.error);
+        setRol(data.rol);
+        const locales = new Map((state.jugadores || []).map(j => [j.id, j]));
+        state.precios = data.precios || state.precios;
+        state.jugadores = (data.jugadores || []).map(s => {
+          const l = locales.get(s.id) || {};
+          return { ...s, anterior: s.pagoParcial, obsAnterior: s.obs, pagoParcial: (s.parciales || [])[mesVista] || 0, exentos: s.exentos || [], acuerdoMes: l.acuerdoMes || 'mes1' };
+        });
+        state.camisetas = data.camisetas || [];
+        state.remanentes = data.remanentes || [];
+        state.gastosLiga = data.gastosLiga || [];
+        state.gastos = data.gastos || [];
+        guardarLocal();
+        toast('✅ Datos sincronizados');
+      } catch (err) {
+        console.warn('Modo local:', err);
+        toast('⚠️ No se pudo sincronizar (' + (err && err.message ? err.message : 'sin conexión') + '). Se muestran los datos de este dispositivo.', true, true);
+        renderTodo();
+      }
+    }
+
+    function renderTodo() {
+      aplicarVistaMes();
+      actualizarEncabezadosPrecios();
+      renderKPIs();
+      renderJugadores();
+      renderCamisetas();
+      renderRemanentes();
+      renderLiga();
+      renderReporte();
+      renderReporteMensual();
+      renderGastos();
+      renderCumples();
+      poblarSelectores();
+    }
+
+    function actualizarEncabezadosPrecios() {
+      const p = state.precios || { inscripcion: 12000, mes1: 30000, mes2: 30000, mes3: 30000, mes4: 30000 };
+      
+      const strInsc = `$${p.inscripcion.toLocaleString('es-AR')}`;
+      const strM1 = `$${p.mes1.toLocaleString('es-AR')}`;
+      const strM2 = `$${p.mes2.toLocaleString('es-AR')}`;
+      const strM3 = `$${p.mes3.toLocaleString('es-AR')}`;
+      const strM4 = `$${p.mes4.toLocaleString('es-AR')}`;
+
+      document.getElementById('tag-precio-insc').innerText = strInsc;
+      document.getElementById('tag-precio-m1').innerText = strM1;
+      document.getElementById('tag-precio-m2').innerText = strM2;
+      document.getElementById('tag-precio-m3').innerText = strM3;
+      document.getElementById('tag-precio-m4').innerText = strM4;
+
+      document.getElementById('th-precio-insc').innerText = strInsc;
+      document.getElementById('th-precio-m1').innerText = strM1;
+      document.getElementById('th-precio-m2').innerText = strM2;
+      document.getElementById('th-precio-m3').innerText = strM3;
+      document.getElementById('th-precio-m4').innerText = strM4;
+    }
+
+    function renderKPIs() {
+      const p = state.precios || { inscripcion: 12000, mes1: 30000, mes2: 30000, mes3: 30000, mes4: 30000 };
+
+      let totalCuotas = 0;
+      state.jugadores.forEach(j => { j.total = totalJ(j); totalCuotas += j.total; });
+
+      let totalRemanentes = (state.remanentes || []).reduce((acc, r) => acc + Number(r.monto || 0), 0);
+      let totalLiga = (state.gastosLiga || []).reduce((acc, g) => acc + Number(g.pagado || 0), 0);
+      totalRemanentes -= gastosOrigen('extras');   // gastos pagados con ingresos extras
+      totalLiga += gastosOrigen('fondo');          // gastos pagados con el fondo general
+      let saldoCaja = (totalCuotas + totalRemanentes) - totalLiga;
+
+      document.getElementById('kpi-ingresos').innerText = `$${totalCuotas.toLocaleString('es-AR')}`;
+      document.getElementById('kpi-remanente').innerText = `$${totalRemanentes.toLocaleString('es-AR')}`;
+      document.getElementById('kpi-egresos').innerText = `$${totalLiga.toLocaleString('es-AR')}`;
+      
+      const elSaldo = document.getElementById('kpi-saldo');
+      elSaldo.innerText = `$${saldoCaja.toLocaleString('es-AR')}`;
+      elSaldo.className = `text-xl sm:text-2xl font-black mt-1 ${saldoCaja >= 0 ? 'text-amber-400' : 'text-rose-400'}`;
+
+      document.getElementById('total-remanente-sum').innerText = `$${totalRemanentes.toLocaleString('es-AR')} acumulado`;
+      document.getElementById('total-jugadores-count').innerText = `${state.jugadores.length} integrantes`;
+
+      document.getElementById('rep-ingresos').innerText = `$${totalCuotas.toLocaleString('es-AR')}`;
+      document.getElementById('rep-remanentes').innerText = `$${totalRemanentes.toLocaleString('es-AR')}`;
+      document.getElementById('rep-egresos').innerText = `$${totalLiga.toLocaleString('es-AR')}`;
+      document.getElementById('rep-saldo').innerText = `$${saldoCaja.toLocaleString('es-AR')}`;
+    }
+
+    
+    let sortMode = 'az'; // 'az' por defecto
+
+    function toggleOrdenJugadores() {
+      sortMode = (sortMode === 'az') ? 'original' : 'az';
+      const btnTxt = document.getElementById('btn-orden-txt');
+      const btnIcon = document.getElementById('btn-orden-icon');
+      if (btnTxt && btnIcon) {
+        if (sortMode === 'az') {
+          btnTxt.innerText = "Orden: Alfabético (A-Z)";
+          btnIcon.innerText = "📋";
+        } else {
+          btnTxt.innerText = "Orden: Planilla (Original)";
+          btnIcon.innerText = "🔤";
+        }
+      }
+      renderJugadores();
+    }
+
+    function renderJugadores() {
+      const tbody = document.getElementById('tabla-jugadores-body');
+      tbody.innerHTML = '';
+
+      let lista = state.jugadores.map((j, idx) => ({ ...j, originalIdx: idx }));
+
+      if (sortMode === 'az') {
+        lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+      }
+
+      lista.forEach(j => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition text-slate-700";
+        tr.innerHTML = `
+          <td class="py-3 px-4 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+            <div class="font-bold text-slate-900 leading-tight">${esc(j.nombre)}</div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+              ${j.dni ? `<span>DNI: ${esc(j.dni)}</span>` : ''}
+              ${j.celular ? `<span class="text-emerald-600 font-medium">📞 ${esc(j.celular)}</span>` : ''}
+            </div>
+          </td>
+          <td class="py-3 px-2 text-center">
+            <input type="checkbox" ${j.inscripcion ? 'checked' : ''} onchange="togglePagoJugador('${j.id}', 2, this.checked)" 
+                   class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+          </td>
+          <td class="py-3 px-2 text-center">
+            <input type="checkbox" ${j.mes1 ? 'checked' : ''} onchange="togglePagoJugador('${j.id}', 3, this.checked)" 
+                   class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+          </td>
+          <td class="py-3 px-2 text-center">
+            <input type="checkbox" ${j.mes2 ? 'checked' : ''} onchange="togglePagoJugador('${j.id}', 4, this.checked)" 
+                   class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+          </td>
+          <td class="py-3 px-2 text-center">
+            <input type="checkbox" ${j.mes3 ? 'checked' : ''} onchange="togglePagoJugador('${j.id}', 5, this.checked)" 
+                   class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+          </td>
+          <td class="py-3 px-2 text-center">
+            <input type="checkbox" ${j.mes4 ? 'checked' : ''} onchange="togglePagoJugador('${j.id}', 6, this.checked)" 
+                   class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+          </td>
+          <td class="py-2 px-2 text-center bg-indigo-50/40">
+            <div class="flex flex-col items-center gap-1.5 py-1">
+              <div class="flex items-center justify-center">
+                <span class="text-xs text-indigo-400 font-bold mr-1">$</span>
+                <input type="number" min="0" step="500" value="${j.pagoParcial || ''}" onchange="actualizarPagoParcial('${j.id}', this.value)" placeholder="0" 
+                       class="w-24 text-right bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-xs font-black text-indigo-900 focus:ring-2 focus:ring-indigo-600 focus:outline-none shadow-sm">
+              </div>
+              <div class="flex items-center gap-1.5 text-[11px] text-slate-700">
+                <label class="flex items-center gap-1 cursor-pointer font-semibold" title="Ingresó tarde o tiene un acuerdo: no figura como deudor en el mes seleccionado (arriba, 📆 Mes en pantalla)">
+                  <input type="checkbox" ${j.acuerdoEspecial ? 'checked' : ''} onchange="toggleAcuerdoEspecial('${j.id}', this.checked)" class="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300">
+                  🤝 Sin deuda
+                </label>
+                <select style="display:none;" id="sel-mes-${j.id}" onchange="actualizarAcuerdoMes('${j.id}', this.value)" class="bg-white border border-indigo-200 rounded px-1.5 py-0.5 text-[11px] text-indigo-900 font-bold focus:ring-1 focus:ring-indigo-600">
+                  <option value="inscripcion" ${j.acuerdoMes === 'inscripcion' ? 'selected' : ''}>Inscrip.</option>
+                  <option value="mes1" ${j.acuerdoMes === 'mes1' || !j.acuerdoMes ? 'selected' : ''}>Sept.</option>
+                  <option value="mes2" ${j.acuerdoMes === 'mes2' ? 'selected' : ''}>Oct.</option>
+                  <option value="mes3" ${j.acuerdoMes === 'mes3' ? 'selected' : ''}>Nov.</option>
+                  <option value="mes4" ${j.acuerdoMes === 'mes4' ? 'selected' : ''}>Dic.</option>
+                </select>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-3 text-right font-black text-emerald-700 text-sm">$${Number(j.total || 0).toLocaleString('es-AR')}</td>
+          <td class="py-2 px-3">
+            <input type="text" value="${esc(j.obs || '')}" onchange="actualizarObsJugador('${j.id}', this.value, true)" placeholder="Aclarar motivo de pago menor o nota..." 
+                   class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:bg-white focus:ring-1 focus:ring-slate-800">
+          </td>
+          <td class="py-3 px-3 text-center no-print flex items-center justify-center gap-1.5">
+            <button onclick="verFichaJugador(${j.originalIdx})" class="text-slate-700 hover:text-slate-950 text-xs bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 border border-slate-200 transition" title="Ver y editar ficha">
+              ✏️ Ficha
+            </button>
+            <button onclick="eliminarJugador('${j.id}')" class="text-rose-500 hover:text-rose-700 font-bold text-sm px-1.5 py-1" title="Eliminar del equipo">
+              &times;
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function toggleAcuerdoEspecial(id, val) {
+      const j = state.jugadores.find(x => x.id === id); if (!j) return;
+      j.exentos = j.exentos || [false, false, false, false, false]; j.exentos[mesVista] = val;
+      guardarLocal(); renderTodo();
+      api({ action: 'setExento', id, mes: mesVista, valor: val });
+    }
+
+    function actualizarAcuerdoMes(idOrFila, mes) {
+      const j = state.jugadores.find(item => (item.id === idOrFila));
+      if (j) {
+        j.acuerdoMes = mes;
+        guardarLocal();
+      }
+    }
+
+    function actualizarPagoParcial(id, valor) { setParcialMes(id, mesVista, valor); }
+
+    function abrirModalReporteDeudas() {
+      const p = state.precios || { inscripcion: 12000, mes1: 30000, mes2: 30000, mes3: 30000, mes4: 30000 };
+      const totalExigible = exigible(p);
+      document.getElementById('flyer-fecha-texto').innerText = new Date().toLocaleDateString('es-AR');
+      
+      const tbody = document.getElementById('flyer-deudas-body');
+      tbody.innerHTML = '';
+
+      let jugadoresOrdenados = [...state.jugadores].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+
+      jugadoresOrdenados.forEach(j => {
+        let totalPagado = Number(j.total || 0);
+        let saldoDeudor = deudaJ(j);
+
+        let estadoBadge = '';
+        if (saldoDeudor <= 0) {
+          estadoBadge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">✅ AL DÍA</span>';
+        } else {
+          let detalleDeuda = pendientes(j);
+          if (j.pagoParcial > 0) detalleDeuda.push(`Entrega: $${j.pagoParcial.toLocaleString('es-AR')}`);
+
+          let notaMotivo = (notaMesActual(j) && notaMesActual(j).trim() !== '') ? `<span class="block text-[9px] text-amber-700 italic font-semibold mt-0.5">Nota: ${esc(notaMesActual(j).trim())}</span>` : '';
+
+          estadoBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">⚠️ Debe $${saldoDeudor.toLocaleString('es-AR')}</span><span class="block text-[9px] text-slate-500 mt-0.5">(${detalleDeuda.join(" | ")})</span>${notaMotivo}`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = saldoDeudor <= 0 ? "bg-emerald-50/40" : "hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="py-2.5 px-3">
+            <span class="font-bold text-slate-900">${esc(j.nombre)}</span>
+          </td>
+          <td class="py-2.5 px-3 text-right font-black text-slate-800">$${totalPagado.toLocaleString('es-AR')}</td>
+          <td class="py-2.5 px-3 text-center">${estadoBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('modal-deudas-reporte').classList.remove('hidden');
+    }
+
+    function cerrarModalReporteDeudas() {
+      document.getElementById('modal-deudas-reporte').classList.add('hidden');
+    }
+
+    async function descargarImagenDeudas() {
+      const elemento = document.getElementById('flyer-deudas-captura');
+      try {
+        const canvas = await html2canvas(elemento, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        const enlace = document.createElement('a');
+        enlace.download = `5DIGOS_Deudas_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.png`;
+        enlace.href = canvas.toDataURL('image/png');
+        enlace.click();
+      } catch (err) {
+        alert("Error al generar la imagen: " + err.message);
+      }
+    }
+
+    async function compartirImagenWhatsApp() {
+      const elemento = document.getElementById('flyer-deudas-captura');
+      try {
+        const canvas = await html2canvas(elemento, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          const archivo = new File([blob], '5DIGOS_Estado_Deudas.png', { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+            await navigator.share({
+              files: [archivo],
+              title: 'Estado de Cuenta 5DÍGOS FC',
+              text: '⚽ Estado de cuenta y deudas a mes vencido de 5DÍGOS F.C.'
+            });
+          } else {
+            const enlace = document.createElement('a');
+            enlace.download = '5DIGOS_Estado_Deudas.png';
+            enlace.href = canvas.toDataURL('image/png');
+            enlace.click();
+            alert("¡Imagen generada y descargada! Ya podés adjuntarla en WhatsApp.");
+          }
+        }, 'image/png');
+      } catch (err) {
+        alert("No se pudo compartir directamente: " + err.message);
+      }
+    }
+
+    function imprimirPDFDeudas() {
+      window.print();
+    }
+
+    function copiarReporteDeudas() {
+      const p = state.precios || { inscripcion: 12000, mes1: 30000, mes2: 30000, mes3: 30000, mes4: 30000 };
+      const totalExigible = exigible(p);
+
+      let jugadoresOrdenados = [...state.jugadores].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+
+      let msg = `⚽ *ESTADO DE CUENTA - PLANTEL 5DIGOS F.C.* ⚽\n`;
+      msg += `📅 *Actualizado a:* Septiembre (Mes vencido)\n`;
+      msg += `📌 *Cuotas vencidas:* ${textoExigible(p)}\n`;
+      msg += `----------------------------------------------\n\n`;
+
+      jugadoresOrdenados.forEach(j => {
+        let totalPagado = Number(j.total || 0);
+        let saldoDeudor = deudaJ(j);
+
+        msg += `👤 *${j.nombre}*\n`;
+        msg += `• Total pagado: $${totalPagado.toLocaleString('es-AR')}\n`;
+
+        if (saldoDeudor <= 0) {
+          msg += `• Estado: ✅ *AL DÍA*\n`;
+        } else {
+          let detalleDeuda = [];
+          detalleDeuda.push(...pendientes(j));
+          if (j.pagoParcial > 0) detalleDeuda.push(`Entrega realizada: $${j.pagoParcial.toLocaleString('es-AR')}`);
+
+          msg += `• ⚠️ *Deuda vencida:* $${saldoDeudor.toLocaleString('es-AR')} [${detalleDeuda.join(" | ")}]\n`;
+        }
+
+        if (notaMesActual(j) && notaMesActual(j).trim() !== '') {
+          msg += `• Motivo / Aclaración: _${notaMesActual(j).trim()}_\n`;
+        }
+        msg += `\n`;
+      });
+
+      msg += `----------------------------------------------\n`;
+      msg += `Por favor coordinar el pago con el encargado. ¡Vamos 5DIGOS! 💪⚽`;
+
+      navigator.clipboard.writeText(msg).then(() => {
+        alert("¡Reporte de deudas copiado con éxito! Ya podés pegarlo en WhatsApp.");
+      }).catch(err => {
+        prompt("Copiá el reporte para WhatsApp:", msg);
+      });
+    }
+
+    function renderCamisetas() {
+      const tbody = document.getElementById('tabla-camisetas-body');
+      tbody.innerHTML = '';
+
+      const conteo = {};
+      state.jugadores.forEach(j => conteo[j.nombre] = 0);
+      (state.camisetas || []).forEach(c => {
+        if (conteo[c.jugador] !== undefined) conteo[c.jugador]++;
+        else conteo[c.jugador] = 1;
+      });
+
+      const conteoDiv = document.getElementById('lista-conteo-lavados');
+      conteoDiv.innerHTML = '';
+      Object.keys(conteo).sort((a,b) => conteo[b] - conteo[a]).forEach(jugador => {
+        const cant = conteo[jugador];
+        conteoDiv.innerHTML += `
+          <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+            <span class="font-medium text-slate-700 truncate mr-2">${jugador}</span>
+            <span class="px-2 py-0.5 rounded-full font-bold ${cant > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}">
+              ${cant} ${cant === 1 ? 'vez' : 'veces'}
+            </span>
+          </div>
+        `;
+      });
+
+      (state.camisetas || []).forEach((c, index) => {
+        const enLavado = (c.estado || '').toLowerCase().includes('lavado');
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="py-3 px-3 text-slate-500">${esc(c.fecha)}</td>
+          <td class="py-3 px-3 font-semibold text-slate-800">${esc(c.jugador)}</td>
+          <td class="py-3 px-3 text-slate-600">${esc(c.juego)}</td>
+          <td class="py-3 px-2 text-center">
+            <span class="px-2.5 py-1 rounded-full text-xs font-bold ${enLavado ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">
+              ${esc(c.estado)}
+            </span>
+          </td>
+          <td class="py-3 px-3 text-slate-500">${c.devolucion || '<span class="text-amber-600 font-semibold">Pendiente</span>'}</td>
+          <td class="py-3 px-3 text-center no-print flex items-center justify-center gap-2">
+            ${enLavado ? `<button onclick="marcarDevolucionCamiseta('${c.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-1 rounded-lg">Devueltas</button>` : '<span class="text-slate-400 text-xs font-medium">Listo</span>'}
+            <button onclick="eliminarRegistroCamiseta('${c.id}')" class="text-rose-500 hover:text-rose-700 text-xs px-1 font-bold" title="Borrar este registro">&times;</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderRemanentes() {
+      const tbody = document.getElementById('tabla-remanente-body');
+      tbody.innerHTML = '';
+      (state.remanentes || []).forEach((r, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-slate-500 text-xs sm:text-sm">${esc(r.fecha)}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800">${esc(r.detalle)}</td>
+          <td class="py-3 px-4 text-right font-black text-indigo-700">+$${Number(r.monto).toLocaleString('es-AR')}</td>
+          <td class="py-3 px-3 text-center no-print">
+            <button onclick="eliminarRemanente(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-semibold">Borrar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderLiga() {
+      const tbody = document.getElementById('tabla-liga-body');
+      tbody.innerHTML = '';
+      (state.gastosLiga || []).forEach(g => {
+        const pagado = (g.estado || '').toLowerCase().includes('pagado');
+        const pendiente = (g.estado || '').toLowerCase().includes('pendiente');
+        const badgeColor = pagado ? 'bg-emerald-100 text-emerald-800' : (pendiente ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800');
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-slate-500 text-xs sm:text-sm">${esc(g.fecha)}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800">${esc(g.concepto)}</td>
+          <td class="py-3 px-4 text-right text-slate-600">$${Number(g.costo).toLocaleString('es-AR')}</td>
+          <td class="py-3 px-4 text-right font-bold text-rose-600">$${Number(g.pagado).toLocaleString('es-AR')}</td>
+          <td class="py-3 px-4 text-right text-slate-500">$${Number(g.saldo).toLocaleString('es-AR')}</td>
+          <td class="py-3 px-3 text-center">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${badgeColor}">
+              ${esc(g.estado)}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderReporte() {
+      const jBody = document.getElementById('rep-jugadores-body');
+      jBody.innerHTML = '';
+      state.jugadores.forEach(j => {
+        jBody.innerHTML += `
+          <tr>
+            <td class="p-2 font-medium">${esc(j.nombre)}</td>
+            <td class="p-2 text-center">${j.inscripcion ? '✅' : '❌'}</td>
+            <td class="p-2 text-center">${j.mes1 ? '✅' : '❌'}</td>
+            <td class="p-2 text-center">${j.mes2 ? '✅' : '❌'}</td>
+            <td class="p-2 text-center">${j.mes3 ? '✅' : '❌'}</td>
+            <td class="p-2 text-center">${j.mes4 ? '✅' : '❌'}</td>
+            <td class="p-2 text-right font-bold text-emerald-800">$${Number(j.total).toLocaleString('es-AR')}</td>
+            <td class="p-2 text-slate-600">${esc(notaMesActual(j) || '-')}</td>
+          </tr>
+        `;
+      });
+
+      const cBody = document.getElementById('rep-camisetas-body');
+      cBody.innerHTML = '';
+      (state.camisetas || []).forEach(c => {
+        cBody.innerHTML += `
+          <tr>
+            <td class="p-2 text-slate-600">${esc(c.fecha)}</td>
+            <td class="p-2 font-semibold text-slate-800">${esc(c.jugador)}</td>
+            <td class="p-2">${esc(c.juego)}</td>
+            <td class="p-2 text-center font-bold">${esc(c.estado)}</td>
+            <td class="p-2 text-slate-600">${c.devolucion || 'Pendiente'}</td>
+          </tr>
+        `;
+      });
+    }
+
+    function poblarSelectores() {
+      const select = document.getElementById('cam-jugador');
+      select.innerHTML = '<option value="">Elegir jugador del plantel...</option>';
+      state.jugadores.forEach(j => {
+        const opt = document.createElement('option');
+        opt.value = j.nombre; // se asigna como texto, es seguro
+        opt.innerText = j.nombre;
+        select.appendChild(opt);
+      });
+    }
+
+    function abrirModalPrecios() {
+      const p = state.precios || { inscripcion: 12000, mes1: 30000, mes2: 30000, mes3: 30000, mes4: 30000 };
+      document.getElementById('cfg-precio-insc').value = p.inscripcion;
+      document.getElementById('cfg-precio-m1').value = p.mes1;
+      document.getElementById('cfg-precio-m2').value = p.mes2;
+      document.getElementById('cfg-precio-m3').value = p.mes3;
+      document.getElementById('cfg-precio-m4').value = p.mes4;
+      document.getElementById('cfg-mes-corte').value = p.mesCorte ?? 1;
+      document.getElementById('modal-precios').classList.remove('hidden');
+    }
+
+    function cerrarModalPrecios() {
+      document.getElementById('modal-precios').classList.add('hidden');
+    }
+
+    function guardarNuevosPrecios(e) {
+      e.preventDefault();
+      const pInsc = Number(document.getElementById('cfg-precio-insc').value);
+      const pM1 = Number(document.getElementById('cfg-precio-m1').value);
+      const pM2 = Number(document.getElementById('cfg-precio-m2').value);
+      const pM3 = Number(document.getElementById('cfg-precio-m3').value);
+      const pM4 = Number(document.getElementById('cfg-precio-m4').value);
+
+      state.precios = {
+        inscripcion: pInsc,
+        mes1: pM1,
+        mes2: pM2,
+        mes3: pM3,
+        mes4: pM4,
+        mesCorte: Number(document.getElementById('cfg-mes-corte').value)
+      };
+
+      guardarLocal();
+      cerrarModalPrecios();
+      alert("¡Tarifas actualizadas correctamente!");
+
+      if (API_URL) {
+        api({ action: "actualizarPrecios", precios: state.precios });
+      }
+    }
+
+    function toggleFormJugador() {
+      const f = document.getElementById('form-nuevo-jugador');
+      const btn = document.getElementById('btn-toggle-form');
+      f.classList.toggle('hidden');
+      btn.innerText = f.classList.contains('hidden') ? 'Desplegar formulario' : 'Ocultar formulario';
+    }
+
+    function verFichaJugador(idx) {
+      const j = state.jugadores[idx];
+      if (!j) return;
+      document.getElementById('edit-j-idx').value = idx;
+      document.getElementById('edit-j-nombre').value = j.nombre || '';
+      document.getElementById('edit-j-dni').value = j.dni || '';
+      document.getElementById('edit-j-nacimiento').value = j.nacimiento || '';
+      document.getElementById('edit-j-obrasocial').value = j.obrasocial || '';
+      document.getElementById('edit-j-celular').value = j.celular || '';
+      
+      const btnWsp = document.getElementById('ficha-btn-wsp');
+      if (j.celular) {
+        let celLimpio = j.celular.replace(/[^0-9]/g, '');
+        btnWsp.href = `https://wa.me/549${celLimpio}`;
+        btnWsp.classList.remove('hidden');
+      } else {
+        btnWsp.classList.add('hidden');
+      }
+      document.getElementById('modal-ficha').classList.remove('hidden');
+    }
+
+    function cerrarFicha() {
+      document.getElementById('modal-ficha').classList.add('hidden');
+    }
+
+    function guardarEdicionFicha(e) {
+      e.preventDefault();
+      const idx = document.getElementById('edit-j-idx').value;
+      const j = state.jugadores[idx];
+      if (!j) return;
+
+      j.nombre = document.getElementById('edit-j-nombre').value.trim();
+      j.dni = document.getElementById('edit-j-dni').value.trim();
+      j.nacimiento = document.getElementById('edit-j-nacimiento').value.trim();
+      j.obrasocial = document.getElementById('edit-j-obrasocial').value.trim();
+      j.celular = document.getElementById('edit-j-celular').value.trim();
+
+      guardarLocal();
+      cerrarFicha();
+      alert(`¡Ficha de ${j.nombre} actualizada con éxito!`);
+
+      if (API_URL) {
+        api({ action: "editarJugador", id: j.id, nombre: j.nombre, dni: j.dni, nacimiento: j.nacimiento, obrasocial: j.obrasocial, celular: j.celular });
+      }
+    }
+
+    function actualizarObsJugador(id, valor) {
+      const j = state.jugadores.find(x => x.id === id); if (!j) return;
+      j.notas = j.notas || ['', '', '', '', '']; j.notas[mesVista] = valor; j.obs = valor;
+      localStorage.setItem('5digos_fc_db_v13', JSON.stringify(state));
+      api({ action: 'actualizarNotaMes', id, mes: mesVista, obs: valor });
+    }
+
+    function togglePagoJugador(idOrFila, col, valor) {
+      const j = state.jugadores.find(item => (item.id === idOrFila));
+      if (j) {
+        if (col === 2) j.inscripcion = valor;
+        if (col === 3) j.mes1 = valor;
+        if (col === 4) j.mes2 = valor;
+        if (col === 5) j.mes3 = valor;
+        if (col === 6) j.mes4 = valor;
+        guardarLocal();
+      }
+      if (API_URL) {
+        api({ action: "toggleCuota", id: j.id, col, valor });
+      }
+    }
+
+    function agregarJugadorCompleto(e) {
+      e.preventDefault();
+      const nombre = document.getElementById('j-nombre').value.trim();
+      const dni = document.getElementById('j-dni').value.trim();
+      const nacimiento = document.getElementById('j-nacimiento').value;
+      const obrasocial = document.getElementById('j-obrasocial').value.trim();
+      const celular = document.getElementById('j-celular').value.trim();
+
+      if (!nombre) return;
+
+      const nuevo = {
+        id: uid(),
+        nombre,
+        dni,
+        nacimiento: nacimiento ? nacimiento.split('-').reverse().join('/') : '',
+        obrasocial,
+        celular,
+        obs: "",
+        inscripcion: false,
+        mes1: false,
+        mes2: false,
+        mes3: false,
+        mes4: false,
+        pagoParcial: 0,
+        total: 0
+      };
+
+      state.jugadores.push(nuevo);
+      guardarLocal();
+
+      e.target.reset();
+      toggleFormJugador();
+      alert(`¡${nombre} fue agregado al plantel de 5DIGOS FC!`);
+
+      if (API_URL) {
+        api({ action: "agregarJugador", id: nuevo.id, nombre, dni, nacimiento: nuevo.nacimiento, obrasocial, celular });
+      }
+    }
+
+    function eliminarJugador(id) {
+      const j = state.jugadores.find(x => x.id === id);
+      if (!j || !confirm(`¿Eliminar a ${j.nombre} del equipo?`)) return;
+      state.jugadores = state.jugadores.filter(x => x.id !== id);
+      guardarLocal();
+      api({ action: "eliminarJugador", id });
+    }
+
+    function guardarLavadoCamiseta(e) {
+      e.preventDefault();
+      const fecha = document.getElementById('cam-fecha').value;
+      const jugador = document.getElementById('cam-jugador').value;
+      const juego = document.getElementById('cam-juego').value;
+      if (!jugador) return;
+
+      const nuevoLavado = {
+        id: uid(),
+        fecha: fecha ? fecha.split('-').reverse().join('/') : new Date().toLocaleDateString('es-AR'),
+        jugador,
+        juego,
+        estado: "En lavado",
+        devolucion: "",
+        obs: ""
+      };
+
+      if (!state.camisetas) state.camisetas = [];
+      state.camisetas.unshift(nuevoLavado);
+      guardarLocal();
+
+      if (API_URL) {
+        api({ action: "registrarCamiseta", id: nuevoLavado.id, fecha: nuevoLavado.fecha, jugador, juego });
+      }
+    }
+
+    function marcarDevolucionCamiseta(id) {
+      const item = state.camisetas.find(c => c.id === id);
+      if (!item) return;
+      item.estado = "Devueltas";
+      item.devolucion = new Date().toLocaleDateString('es-AR');
+      guardarLocal();
+      api({ action: "devolverCamiseta", id });
+    }
+
+    function eliminarRegistroCamiseta(id) {
+      if (!confirm("¿Borrar este registro puntual de camisetas?")) return;
+      state.camisetas = state.camisetas.filter(c => c.id !== id);
+      guardarLocal();
+      api({ action: "eliminarCamiseta", id });
+    }
+
+    function limpiarHistorialCamisetas() {
+      if (!confirm("⚠️ ¿Estás seguro de que querés vaciar todo el historial de lavado de camisetas? Se reiniciarán también los conteos para la nueva temporada.")) return;
+      state.camisetas = [];
+      guardarLocal();
+      api({ action: "limpiarCamisetas" });
+      toast("Historial de camisetas reiniciado.");
+    }
+
+    function agregarRemanente(e) {
+      e.preventDefault();
+      const fecha = document.getElementById('rem-fecha').value;
+      const detalle = document.getElementById('rem-detalle').value.trim();
+      const monto = monto('rem-monto');
+      if (!detalle || !monto) return;
+
+      if (!state.remanentes) state.remanentes = [];
+      state.remanentes.unshift({
+        id: uid(),
+        fecha: fecha ? fecha.split('-').reverse().join('/') : new Date().toLocaleDateString('es-AR'),
+        detalle,
+        monto
+      });
+
+      document.getElementById('rem-detalle').value = '';
+      document.getElementById('rem-monto').value = '';
+      guardarLocal();
+
+      if (API_URL) {
+        api({ action: "agregarRemanente", id: state.remanentes[0].id, fecha, detalle, monto });
+      }
+    }
+
+    function eliminarRemanente(index) {
+      const r = state.remanentes[index];
+      if (!r || !confirm("¿Eliminar este registro de remanente?")) return;
+      state.remanentes.splice(index, 1);
+      guardarLocal();
+      api({ action: "eliminarRemanente", id: r.id });
+    }
+
+    function agregarPagoLiga(e) {
+      e.preventDefault();
+      const fecha = document.getElementById('liga-fecha').value;
+      const concepto = document.getElementById('liga-concepto').value.trim();
+      const costo = monto('liga-costo');
+      const pagado = monto('liga-pagado');
+
+      if (!concepto) return;
+
+      const estado = (pagado >= costo) ? "Pagado" : (pagado > 0 ? "Parcial" : "Pendiente");
+      const nuevo = {
+        id: uid(),
+        fecha: fecha ? fecha.split('-').reverse().join('/') : new Date().toLocaleDateString('es-AR'),
+        concepto,
+        costo,
+        pagado,
+        saldo: costo - pagado,
+        estado
+      };
+
+      if (!state.gastosLiga) state.gastosLiga = [];
+      state.gastosLiga.unshift(nuevo);
+      document.getElementById('liga-concepto').value = '';
+      document.getElementById('liga-costo').value = '';
+      document.getElementById('liga-pagado').value = '';
+      guardarLocal();
+
+      if (API_URL) {
+        api({ action: "registrarGastoLiga", id: nuevo.id, fecha: nuevo.fecha, concepto, costo, pagado });
+      }
+    }
+
+    function setTab(tab) {
+      const tabs = ['jugadores', 'camisetas', 'remanente', 'liga', 'reporte', 'torneo'];
+      tabs.forEach(t => {
+        const el = document.getElementById(`tab-${t}`);
+        if (el) el.classList.add('hidden');
+        const btn = document.getElementById(`tbtn-${t}`);
+        if (btn) {
+          btn.className = "tab-btn px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap text-slate-600 hover:bg-slate-200/70 transition";
+        }
+      });
+
+      const activeEl = document.getElementById(`tab-${tab}`);
+      if (activeEl) activeEl.classList.remove('hidden');
+      const activeBtn = document.getElementById(`tbtn-${tab}`);
+      if (activeBtn) {
+        activeBtn.className = "tab-btn px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap bg-slate-900 text-white transition shadow-sm";
+      }
+    }
+
+    function copiarTextoReporte() {
+      let totalCuotas = state.jugadores.reduce((acc, j) => acc + Number(j.total || 0), 0);
+      let totalRem = (state.remanentes || []).reduce((acc, r) => acc + Number(r.monto || 0), 0) - gastosOrigen('extras');
+      let totalLiga = (state.gastosLiga || []).reduce((acc, g) => acc + Number(g.pagado || 0), 0) + gastosOrigen('fondo');
+      let saldo = (totalCuotas + totalRem) - totalLiga;
+
+      let msg = `⚽ *REPORTE 5DIGOS FÚTBOL CLUB (+30 B)* ⚽\n`;
+      msg += `📅 *Fecha:* ${new Date().toLocaleDateString('es-AR')}\n\n`;
+      msg += `💰 *ESTADO FINANCIERO:*\n`;
+      msg += `• Cuotas cobradas: $${totalCuotas.toLocaleString('es-AR')}\n`;
+      msg += `• Remanentes/Extras: $${totalRem.toLocaleString('es-AR')}\n`;
+      msg += `• Pagado a Liga: $${totalLiga.toLocaleString('es-AR')}\n`;
+      msg += `👉 *Saldo en Caja:* $${saldo.toLocaleString('es-AR')}\n\n`;
+
+      msg += `👥 *PAGOS DEL PLANTEL:*\n`;
+      state.jugadores.forEach(j => {
+        let detalle = [];
+        if (j.inscripcion) detalle.push("Inscripción");
+        if (j.mes1) detalle.push("Septiembre");
+        if (j.mes2) detalle.push("Octubre");
+        if (j.mes3) detalle.push("Noviembre");
+        if (j.mes4) detalle.push("Diciembre");
+        let txtDet = detalle.length > 0 ? detalle.join(", ") : "Sin pagos";
+        let obsTxt = notaMesActual(j) ? ` (Obs: ${notaMesActual(j)})` : "";
+        msg += `• ${j.nombre}: $${Number(j.total).toLocaleString('es-AR')} [${txtDet}]${obsTxt}\n`;
+      });
+
+      msg += `\n👕 *CAMISETAS:*\n`;
+      let ultLavados = (state.camisetas || []).slice(0, 3);
+      if (ultLavados.length === 0) {
+        msg += `• Historial limpio (sin asignaciones pendientes)\n`;
+      } else {
+        ultLavados.forEach(c => {
+          msg += `• ${c.fecha} - ${c.jugador} (${c.estado})\n`;
+        });
+      }
+
+      navigator.clipboard.writeText(msg).then(() => {
+        alert("¡Reporte copiado! Ya podés pegarlo en el grupo de WhatsApp del equipo.");
+      }).catch(err => {
+        prompt("Copiá el reporte:", msg);
+      });
+    }
+
+    // Ejecuta la carga al iniciar: primero muestra lo guardado, después sincroniza
+    try { renderTodo(); } catch (e) { console.error(e); }   // si algo falla al dibujar, igual se sincroniza
+    cargarDatos();
+
+  </script>
+<div id="toast" class="hidden" onclick="this.classList.add('hidden')"></div>
+<nav id="bnav" class="no-print"></nav>
+<script>
+// Funciones opcionales (Excel e instalación) en un bloque aparte: si algo fallara acá, el resto de la app sigue funcionando.
+async function exportarExcel() {
+      toast('Preparando el Excel…', false, true);
+      try { if (!window.XLSX) await new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); }); }
+      catch (e) { return toast('Para exportar necesitás conexión a internet', true); }
+      const wb = XLSX.utils.book_new(), add = (n, f) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(f.length ? f : [{ '(sin datos)': '' }]), n);
+      add('Jugadores', state.jugadores.map(j => {
+        const o = { Jugador: j.nombre, DNI: j.dni || '', Celular: j.celular || '', 'Obra social': j.obrasocial || '', Nacimiento: j.nacimiento || '' };
+        for (let m = 0; m <= 4; m++) { const pr = (j.parciales || [])[m]; o[NOMBRES[m]] = j[KEYS[m]] ? 'Pagó' : pr ? 'Parcial $' + pr : sinDeuda(j, m) ? 'Sin deuda' : ''; o['Nota ' + NOMBRES[m]] = (j.notas || [])[m] || ''; }
+        o['Total abonado'] = totalJ(j); o['Debe hoy'] = deudaJ(j); return o;
+      }));
+      add('Camisetas', (state.camisetas || []).map(c => ({ Fecha: c.fecha, Jugador: c.jugador, Juego: c.juego, Estado: c.estado, Devolución: c.devolucion || '' })));
+      add('Ingresos extras', (state.remanentes || []).map(r => ({ Fecha: r.fecha, Detalle: r.detalle, Monto: r.monto })));
+      add('Gastos extras', (state.gastos || []).map(g => ({ Fecha: g.fecha, Detalle: g.detalle, Monto: g.monto, 'Se descuenta de': g.origen === 'extras' ? 'Ingresos extras' : 'Fondo general' })));
+      add('Pagos a la Liga', (state.gastosLiga || []).map(g => ({ Fecha: g.fecha, Concepto: g.concepto, Costo: g.costo, Pagado: g.pagado, Saldo: g.saldo, Estado: g.estado })));
+      XLSX.writeFile(wb, '5DIGOS-respaldo-' + new Date().toISOString().slice(0, 10) + '.xlsx'); toast('💾 Excel descargado');
+    }
+function instalarApp() { if (!instalarEvt) return; instalarEvt.prompt(); instalarEvt = null; document.getElementById('btn-instalar').classList.add('hidden'); }
+</script>
+<script>
+// ===== Capa móvil: barra inferior, tarjetas, WhatsApp, auto-sync =====
+window.alert = (m) => toast(String(m));
+setRol(localStorage.getItem('5digos_rol') || 'admin'); actualizarBadgeCola();
+window.addEventListener('online', () => flushCola());
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); instalarEvt = e; document.getElementById('btn-instalar').classList.remove('hidden'); });
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) navigator.serviceWorker.register('sw.js').catch(() => {});
+(function(){
+  const TABS=[['jugadores','👥','Plantel'],['camisetas','👕','Camisetas'],['remanente','💰','Extras'],['liga','🧾','Liga'],['reporte','📑','Reporte'],['torneo','🏆','Torneo']];
+  const nav=document.getElementById('bnav');
+  nav.innerHTML=TABS.map(t=>`<button data-t="${t[0]}" onclick="setTab('${t[0]}')"><span>${t[1]}</span>${t[2]}</button>`).join('');
+  document.getElementById('tbtn-jugadores').parentElement.id='bnav-hide-top';
+  const marcar=t=>nav.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  const _st=setTab; setTab=function(t){_st(t);marcar(t);window.scrollTo(0,0);}; marcar('jugadores');
+
+  const tbl=document.getElementById('tabla-jugadores-body').closest('table');
+  const wrap=tbl.parentElement; wrap.id='wrap-jug';
+  const cont=document.createElement('div'); cont.id='cards-jug'; cont.className='space-y-3 p-3';
+  wrap.parentElement.insertBefore(cont,wrap);
+  let vistaTabla=localStorage.getItem('5digos_vista')==='tabla';
+  function aplicarVista(){wrap.classList.toggle('vt',vistaTabla);renderCards();}
+  window.cambiarVista=()=>{vistaTabla=!vistaTabla;try{localStorage.setItem('5digos_vista',vistaTabla?'tabla':'tarjetas')}catch(e){}aplicarVista();};
+
+  const abiertas=new Set(), $=n=>Number(n||0).toLocaleString('es-AR');
+  window.toggleAbierta=(id,el)=>{el.open?abiertas.add(id):abiertas.delete(id)};
+  const CH=[['inscripcion',2,'Insc'],['mes1',3,'Sep'],['mes2',4,'Oct'],['mes3',5,'Nov'],['mes4',6,'Dic']];
+  function renderCards(){
+    const btnV=`<button class="pbtn w-full bg-slate-100 text-slate-700 border border-slate-200" onclick="cambiarVista()">${vistaTabla?'🗂️ Ver como tarjetas':'📊 Ver como tabla'}</button>`;
+    if(vistaTabla){cont.innerHTML=btnV;return;}
+    const ex=exigible();
+    const lista=state.jugadores.map((j,i)=>({...j,i})).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es',{sensitivity:'base'}));
+    cont.innerHTML=btnV+lista.map(j=>{
+      const debe=deudaJ(j), pend=pendientes(j).join(', ');
+      const st=debe<=0?'<span class="px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800">✅ Al día</span>'
+        :`<span class="px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800">⚠️ Debe $${$(debe)}</span>`;
+      const cel=String(j.celular||'').replace(/\D/g,'').replace(/^0/,'');
+      const msg=encodeURIComponent(`Hola ${j.nombre.split(',').pop().trim()}! Te recuerdo que tenés pendiente en 5DIGOS F.C.: $${$(Math.max(debe,0))}${pend?' ('+pend+')':''}. ¡Gracias!`);
+      const wa=cel&&debe>0?`<a class="pbtn bg-emerald-600 text-white" href="https://wa.me/549${cel}?text=${msg}" target="_blank" rel="noopener">💬 Avisar</a>`:'';
+      return `<div class="pcard">
+        <div class="flex items-start justify-between gap-2 mb-2.5"><div class="min-w-0"><div class="font-extrabold text-slate-900 leading-tight">${esc(j.nombre)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">Abonado: <b class="text-emerald-700">$${$(j.total)}</b></div></div>${st}</div>
+        <div class="grid grid-cols-5 gap-1.5">${CH.map(c=>`<button class="chip ${j[c[0]]?'on':''} ${c[1]-2===mesVista?'sel':''}" onclick="togglePagoJugador('${j.id}',${c[1]},${!j[c[0]]})">${c[2]}</button>`).join('')}</div>
+        <details class="mt-2.5" ${abiertas.has(j.id)?'open':''} ontoggle="toggleAbierta('${j.id}',this)"><summary class="text-xs font-bold text-slate-600 cursor-pointer py-2">Pago parcial, nota y más</summary>
+          <div class="space-y-2 pt-1"><label class="block text-[11px] font-bold text-slate-500">Pago parcial de ${NOMBRES[mesVista]} ($)</label>
+          <input type="number" inputmode="numeric" min="0" step="500" value="${j.pagoParcial||''}" onchange="actualizarPagoParcial('${j.id}',this.value)" placeholder="0">
+          <label class="block text-[11px] font-bold text-slate-500">Nota de ${NOMBRES[mesVista]}</label>
+          <input type="text" value="${esc(j.obs)}" onchange="actualizarObsJugador('${j.id}',this.value,true)" placeholder="Aclaración...">${j.obsAnterior?`<div class="text-[11px] text-slate-400 italic">Nota anterior (general): ${esc(j.obsAnterior)}</div>`:''}
+          <label class="flex items-center gap-2 text-xs font-bold text-slate-600 py-1"><input type="checkbox" ${j.acuerdoEspecial?'checked':''} onchange="toggleAcuerdoEspecial('${j.id}',this.checked)" class="w-5 h-5"> 🤝 Sin deuda en ${NOMBRES[mesVista]} (ingresó tarde / acuerdo)</label>
+          <div class="flex flex-wrap gap-2 pt-1">${wa}<button class="pbtn bg-slate-100 text-slate-800 border border-slate-200" onclick="verFichaJugador(${j.i})">✏️ Ficha</button>
+          <button class="pbtn bg-rose-50 text-rose-700 border border-rose-200" onclick="eliminarJugador('${j.id}')">Eliminar</button></div></div></details></div>`;
+    }).join('')||'<p class="text-center text-slate-400 text-sm py-6">Todavía no hay jugadores.</p>';
+  }
+  const _rj=renderJugadores; renderJugadores=function(){_rj();renderCards();resaltarMes();};
+  aplicarVista();
+
+  // Sincroniza sola al volver a la app (máx. 1 vez cada 30 s)
+  let ult=Date.now();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-ult>30000){ult=Date.now();cargarDatos(true);}});
+})();
+</script>
+</body>
+</html>
