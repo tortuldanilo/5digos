@@ -1,8 +1,8 @@
 // Service worker de 5DIGOS F.C.: permite abrir la app sin conexión.
 // Si cambiás los archivos de la app, subí VERSION (v1 -> v2) para que se actualicen en los teléfonos.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = '5digos-' + VERSION;
-const BASE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const BASE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png','icon-maskable-512.png','apple-touch-icon.png','favicon.png'];
 const EXTERNOS = ['cdn.tailwindcss.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
